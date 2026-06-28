@@ -48,7 +48,7 @@ printf 'ADMIN_TOKEN_SHA256=%s\n' "$(printf '%s' "$ADMIN_TOKEN" | bun run token:h
 unset ADMIN_TOKEN
 ```
 
-4. Seal `deploy/page-secrets.sealed.yaml`.
-5. Run homelab `create-app` for `ukyi-app/page`.
-6. Make the GHCR package public before first deploy.
+4. Run `bun run secret:seal` to create `deploy/page-secrets.sealed.yaml`. The sealed file's `spec.encryptedData` keys are the secret key list; `.app-config.yml` does not declare individual secrets.
+5. Run homelab `create-app` for `ukyi-app/page` with the sealed file.
+6. Confirm private GHCR pull works through the shared `ghcr-pull` imagePullSecret.
 7. Activate DNS/tunnel only after readiness is green.
