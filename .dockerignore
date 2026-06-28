@@ -1,0 +1,7 @@
+.git
+.worktrees
+node_modules
+.env
+.env.local
+.env.admin.local
+coverage
