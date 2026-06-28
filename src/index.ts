@@ -18,19 +18,6 @@ const pages = new PageRepository(runtimePool);
 const server = createServer({
   config,
   pages,
-  ready: async () => {
-    try {
-      await runtimePool.query(`
-        select p.path
-        from pages p
-        left join page_revisions r on r.id = p.current_revision_id
-        limit 1
-      `);
-      return true;
-    } catch {
-      return false;
-    }
-  },
 });
 
 Bun.serve({

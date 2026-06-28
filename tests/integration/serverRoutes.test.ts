@@ -32,7 +32,6 @@ beforeEach(async () => {
   server = createServer({
     config: testConfig(),
     pages: new PageRepository(pool),
-    ready: async () => true,
   });
 });
 
@@ -131,7 +130,7 @@ describe("server routes with Postgres", () => {
     );
     expect(invalidJson.status).toBe(400);
 
-    const reserved = await server.fetch(req("/api/pages", adminJson({ path: "/healthz", html: "bad" })));
+    const reserved = await server.fetch(req("/api/pages", adminJson({ path: "/health", html: "bad" })));
     expect(reserved.status).toBe(400);
 
     const created = (await (await server.fetch(req("/api/pages", adminJson({ path: "/demo", html: "v1" })))).json()) as any;
@@ -195,17 +194,6 @@ describe("server routes with Postgres", () => {
     }
   });
 
-  test("readiness can fail independently from liveness", async () => {
-    const failing = createServer({
-      config: testConfig(),
-      pages: new PageRepository(pool),
-      ready: async () => false,
-    });
-
-    expect((await failing.fetch(req("/healthz"))).status).toBe(200);
-    expect((await failing.fetch(req("/readyz"))).status).toBe(503);
-  });
-
   test("repeated read timeouts do not exhaust the pool", async () => {
     await pool.end();
     pool = await createTestPool({ statementTimeoutMs: 50 });
@@ -213,19 +201,6 @@ describe("server routes with Postgres", () => {
     server = createServer({
       config: testConfig({ dbStatementTimeoutMs: 50, dbOperationTimeoutMs: 200 }),
       pages,
-      ready: async () => {
-        try {
-          await pool.query(`
-            select p.path
-            from pages p
-            left join page_revisions r on r.id = p.current_revision_id
-            limit 1
-          `);
-          return true;
-        } catch {
-          return false;
-        }
-      },
     });
     await pages.savePage({ path: "/blocked-read", html: "ok" });
     const migratorPool = createMigratorTestPool();
@@ -243,7 +218,7 @@ describe("server routes with Postgres", () => {
       await migratorPool.end();
     }
 
-    expect((await server.fetch(req("/readyz"))).status).toBe(200);
+    expect((await server.fetch(req("/health"))).status).toBe(200);
     expect(await (await server.fetch(req("/blocked-read"))).text()).toBe("ok");
   });
 
@@ -253,7 +228,6 @@ describe("server routes with Postgres", () => {
     server = createServer({
       config: testConfig({ dbStatementTimeoutMs: 50, dbOperationTimeoutMs: 200 }),
       pages: new PageRepository(pool),
-      ready: async () => true,
     });
     const migratorPool = createMigratorTestPool();
     try {

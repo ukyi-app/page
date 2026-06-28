@@ -14,7 +14,6 @@ type Pages = Pick<PageRepository, "getCurrentPage" | "getCurrentMetadata" | "lis
 
 export type AppContext = {
   config: AppConfig;
-  ready: () => Promise<boolean>;
   pages: Pages;
 };
 
@@ -23,17 +22,8 @@ export function createServer(context: AppContext): { fetch: (request: Request) =
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
 
-      if (url.pathname === "/healthz") {
+      if (url.pathname === "/health") {
         return request.method === "GET" ? json({ ok: true }) : error("method_not_allowed", 405);
-      }
-      if (url.pathname === "/readyz") {
-        if (request.method !== "GET") return error("method_not_allowed", 405);
-        try {
-          const ok = await withReadDeadline("readyz", context.config.dbOperationTimeoutMs, context.ready());
-          return json({ ok }, ok ? 200 : 503);
-        } catch {
-          return json({ ok: false }, 503);
-        }
       }
 
       if (isAdminPath(url.pathname)) {

@@ -81,8 +81,16 @@ function request(path: string, init?: RequestInit) {
 }
 
 describe("createServer", () => {
+  test("serves the chart health endpoint", async () => {
+    const server = createServer({ config, pages: new FakePages() });
+    const response = await server.fetch(request("/health"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+  });
+
   test("rejects unauthenticated writes", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new FakePages() });
+    const server = createServer({ config, pages: new FakePages() });
     const response = await server.fetch(request("/api/pages", { method: "PUT", body: "{}" }));
 
     expect(response.status).toBe(401);
@@ -101,7 +109,7 @@ describe("createServer", () => {
         const pages = new FakePages();
         const headers = new Headers(candidate.init?.headers);
         if (authorization) headers.set("authorization", authorization);
-        const server = createServer({ config, ready: async () => true, pages });
+        const server = createServer({ config, pages });
         const response = await server.fetch(request(candidate.path, { ...candidate.init, headers }));
 
         expect(response.status).toBe(401);
@@ -112,7 +120,7 @@ describe("createServer", () => {
 
   test("writes with admin auth and renders exact html", async () => {
     const pages = new FakePages();
-    const server = createServer({ config, ready: async () => true, pages });
+    const server = createServer({ config, pages });
     const put = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -129,7 +137,7 @@ describe("createServer", () => {
   });
 
   test("rejects oversized html", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new FakePages() });
+    const server = createServer({ config, pages: new FakePages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -142,7 +150,7 @@ describe("createServer", () => {
   });
 
   test("accepts escaped HTML at the decoded HTML byte limit", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new FakePages() });
+    const server = createServer({ config, pages: new FakePages() });
     const escaped = '"'.repeat(100);
     const response = await server.fetch(
       request("/api/pages", {
@@ -157,7 +165,7 @@ describe("createServer", () => {
   });
 
   test("checks auth before reading an oversized body", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new FakePages() });
+    const server = createServer({ config, pages: new FakePages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -170,7 +178,7 @@ describe("createServer", () => {
   });
 
   test("rejects oversized raw JSON before parsing", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new FakePages() });
+    const server = createServer({ config, pages: new FakePages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -194,7 +202,7 @@ describe("createServer", () => {
 
     for (const candidate of cases) {
       const pages = new FakePages();
-      const server = createServer({ config, ready: async () => true, pages });
+      const server = createServer({ config, pages });
       const response = await server.fetch(
         request(candidate.path, {
           method: candidate.method,
@@ -220,7 +228,7 @@ describe("createServer", () => {
 
     for (const candidate of cases) {
       const pages = new FakePages();
-      const server = createServer({ config, ready: async () => true, pages });
+      const server = createServer({ config, pages });
       const response = await server.fetch(
         request("/api/pages/rollback", {
           method: "POST",
@@ -236,7 +244,7 @@ describe("createServer", () => {
   });
 
   test("maps render repository failures to stable 503", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new ThrowingPages() });
+    const server = createServer({ config, pages: new ThrowingPages() });
     const response = await server.fetch(request("/demo"));
 
     expect(response.status).toBe(503);
@@ -244,26 +252,15 @@ describe("createServer", () => {
   });
 
   test("maps hanging repository calls to stable 503 before infrastructure timeout", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new HangingPages() });
+    const server = createServer({ config, pages: new HangingPages() });
     const response = await server.fetch(request("/demo"));
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "service_unavailable" });
   });
 
-  test("maps hanging readiness checks to stable 503", async () => {
-    const server = createServer({
-      config,
-      ready: async () => new Promise<boolean>(() => {}),
-      pages: new FakePages(),
-    });
-    const response = await server.fetch(request("/readyz"));
-
-    expect(response.status).toBe(503);
-  });
-
   test("maps admin repository failures to stable 503", async () => {
-    const server = createServer({ config, ready: async () => true, pages: new ThrowingPages() });
+    const server = createServer({ config, pages: new ThrowingPages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",

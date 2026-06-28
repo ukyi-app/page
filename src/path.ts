@@ -1,5 +1,5 @@
 const PAGE_PATH_RE = /^\/[a-z0-9_-]+(?:\/[a-z0-9_-]+)*$/;
-const RESERVED_EXACT = new Set(["/api", "/healthz", "/readyz", "/metrics", "/favicon.ico", "/robots.txt"]);
+const RESERVED_EXACT = new Set(["/api", "/health", "/metrics", "/favicon.ico", "/robots.txt"]);
 
 export function canonicalizePagePath(input: unknown): string {
   if (typeof input !== "string") throw new Error("path must be a string");

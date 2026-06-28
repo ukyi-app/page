@@ -17,7 +17,7 @@ describe("canonicalizePagePath", () => {
     },
   );
 
-  test.each(["/api", "/api/pages", "/healthz", "/readyz", "/metrics", "/favicon.ico", "/robots.txt"])(
+  test.each(["/api", "/api/pages", "/health", "/metrics", "/favicon.ico", "/robots.txt"])(
     "marks %s as reserved",
     (path) => {
       expect(isReservedPath(path)).toBe(true);
