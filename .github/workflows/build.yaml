@@ -37,12 +37,3 @@ jobs:
       - run: ALLOW_TEST_DB_RESET=1 bun run test:integration
       - if: always()
         run: docker compose -f docker-compose.test.yaml down -v
-  image:
-    if: github.event_name == 'push'
-    needs: [test, integration]
-    permissions:
-      contents: read
-      packages: write
-    uses: ukyi-app/homelab/.github/workflows/reusable-app-build.yaml@ffa0a6adb2a13cb750b778171538788b5800c5ec
-    with:
-      app: ${{ github.event.repository.name }}

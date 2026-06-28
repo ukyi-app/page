@@ -12,6 +12,7 @@
     "test:integration": "bun test --max-concurrency=1 tests/integration",
     "typecheck": "tsc --noEmit",
     "token:hash": "bun scripts/hash-token.ts",
+    "secret:seal": "bun tools/seal-secret.mts --config .app-config.yml --env .env",
     "smoke": "scripts/smoke.sh",
     "smoke:container": "scripts/container-smoke.sh"
   },
