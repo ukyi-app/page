@@ -1,0 +1,10 @@
+{
+  "name": "homelab-app-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scaffold": "bun tools/scaffold-kind.mts",
+    "test": "bun test tools",
+    "secret:seal": "bun tools/seal-secret.mts --config .app-config.yml --env .env"
+  }
+}
