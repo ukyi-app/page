@@ -14,7 +14,10 @@
     "token:hash": "bun scripts/hash-token.ts",
     "secret:seal": "bun tools/seal-secret.mts --config .app-config.yml --env .env",
     "smoke": "scripts/smoke.sh",
-    "smoke:container": "scripts/container-smoke.sh"
+    "smoke:container": "scripts/container-smoke.sh",
+    "web:install": "cd web && bun install",
+    "web:dev": "cd web && bun run dev",
+    "web:build": "cd web && bun install --frozen-lockfile && bun run build"
   },
   "dependencies": {
     "hono": "^4.12.27",
