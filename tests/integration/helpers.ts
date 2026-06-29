@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { migrate } from "../../src/db";
+import { migrate } from "../../src/core/database/db";
 
 export const testDatabaseUrl =
   process.env.TEST_DATABASE_URL ?? "postgres://page_runtime:runtime@localhost:15432/page_test";
