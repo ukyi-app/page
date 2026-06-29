@@ -61,7 +61,10 @@ src/
   modules/
     pages/                 # pages.module, admin + render controllers, service,
                            # repository, contract, validation
+    admin/                 # admin.module + admin-ui.controller (serves the /admin SPA)
     health/                # health.module + health.controller
+web/                       # admin console SPA (Vite + React + Tailwind v4 + Base UI),
+                           # built single-file → web/dist/index.html, served at /admin
 ```
 
 ## API
@@ -71,11 +74,21 @@ All `/api/pages` routes require `Authorization: Bearer <token>`. Render routes a
 | Method & path | Purpose |
 |---|---|
 | `GET /health` | liveness — `{ "ok": true }` |
-| `PUT /api/pages` | create or update a page (update requires `expectedContentSha256`) |
-| `GET /api/pages?path=/demo` | current page metadata |
+| `PUT /api/pages` | create or update a page (update requires `expectedContentSha256`); saving re-activates a disabled page |
+| `GET /api/pages?path=/demo` | current page metadata (404 when disabled) |
+| `GET /api/pages/list` | all current pages incl. disabled, with `disabledAt` / `purgeAfter` |
+| `GET /api/pages/source?path=/demo` | current page incl. raw `html` (admin edit; works for disabled pages) |
 | `GET /api/pages/revisions?path=/demo` | bounded revision list |
+| `DELETE /api/pages?path=/demo` | soft-delete (disable now, schedule purge ~1 week later) |
 | `POST /api/pages/rollback` | move current pointer to an earlier revision |
-| `GET /<path>` | render the stored HTML for that path |
+| `POST /api/pages/restore` | re-activate a soft-deleted page and cancel its purge |
+| `GET /<path>` | render the stored HTML for that path (404 when disabled) |
+| `GET /admin` | admin console SPA (public shell; all actions require the token) |
+
+Soft delete is reversible: `DELETE` sets `disabled_at` / `purge_after` (rows are kept), the render
+route immediately returns 404, and a background sweep hard-deletes pages whose `purge_after` has
+passed (`PURGE_GRACE_MS`, default 7 days; sweep every `PURGE_SWEEP_INTERVAL_MS`, default 1 h). Restoring
+(or saving the page again) cancels the purge.
 
 Admin write:
 
@@ -94,6 +107,33 @@ curl "$BASE_URL/demo"
 
 Updates require `expectedContentSha256`. Rollback uses `POST /api/pages/rollback` with `path`,
 positive integer `revisionId`, and `expectedContentSha256`.
+
+## Admin Console (`/admin`)
+
+A single-page admin UI (Vite + React + Tailwind v4 + Base UI, shadcn-style components) lives in
+`web/`. It is built into one self-contained `web/dist/index.html` (JS, CSS, and fonts inlined) and
+served by the backend at `GET /admin` under a same-origin CSP — so it needs no CORS and ships inside
+the same image. The page itself is a public shell; every action sends `Authorization: Bearer <token>`,
+so nothing works without the admin token.
+
+What it does: log in with an id (`ukkiee`) + the admin token, list all pages (active and disabled),
+create/edit a page (path validation, paste or upload an HTML file, live preview), open the rendered
+page, soft-delete (with the purge countdown) and restore. The token is held in `sessionStorage` and
+cleared on logout.
+
+Local development of the SPA (it proxies `/api` to the backend, so no CORS):
+
+```bash
+bun run dev            # backend on :8080 (see below)
+bun run web:dev        # admin SPA on http://localhost:5173 (proxies /api → :8080)
+# point the proxy elsewhere (e.g. prod): VITE_API_PROXY=https://page.ukyi.app bun run web:dev
+```
+
+Build the single-file bundle the backend serves at `/admin`:
+
+```bash
+bun run web:build      # → web/dist/index.html (the Docker image builds this in its own stage)
+```
 
 ## Local Development
 
@@ -138,6 +178,10 @@ Pushing to `main` triggers `.github/workflows/release.yaml`, which calls the hom
 build workflow to build a `linux/arm64` image and push it to GHCR as
 `ghcr.io/ukyi-app/page:sha-<commit>`. Deployment is driven separately by the homelab side; this
 repo only builds and pushes the image.
+
+The `Dockerfile` is multi-stage: a `web` stage runs `bun run build` inside `web/` to produce the
+single-file `web/dist/index.html`, which the runtime stage copies to `/app/web/dist` so the backend
+can serve it at `/admin`. No separate frontend deploy is needed.
 
 ## Homelab Onboarding
 
