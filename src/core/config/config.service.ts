@@ -14,4 +14,7 @@ export class ConfigService {
   get dbConnectionTimeoutMs(): number { return this.cfg.dbConnectionTimeoutMs; }
   get dbStatementTimeoutMs(): number { return this.cfg.dbStatementTimeoutMs; }
   get dbOperationTimeoutMs(): number { return this.cfg.dbOperationTimeoutMs; }
+  // 일부 테스트는 AppConfig 리터럴에 purge 키를 두지 않으므로 안전한 기본값으로 폴백한다.
+  get purgeGraceMs(): number { return this.cfg.purgeGraceMs ?? 7 * 24 * 60 * 60 * 1_000; }
+  get purgeSweepIntervalMs(): number { return this.cfg.purgeSweepIntervalMs ?? 60 * 60 * 1_000; }
 }

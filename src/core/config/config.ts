@@ -8,9 +8,15 @@ export type AppConfig = {
   dbConnectionTimeoutMs: number;
   dbStatementTimeoutMs: number;
   dbOperationTimeoutMs: number;
+  /** soft delete 후 완전 삭제까지의 유예(ms). 기본 7일. loadConfig가 항상 채우며, getter가 기본값 폴백. */
+  purgeGraceMs?: number;
+  /** purge 스윕 주기(ms). 기본 1시간. */
+  purgeSweepIntervalMs?: number;
 };
 
 const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
+const DEFAULT_PURGE_GRACE_MS = 7 * 24 * 60 * 60 * 1_000;
+const DEFAULT_PURGE_SWEEP_INTERVAL_MS = 60 * 60 * 1_000;
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
   // homelab conn 핸들(db-page-conn)은 PAGE_DATABASE_URL(런타임/풀러)·PAGE_MIGRATE_DATABASE_URL(직결)로
@@ -43,6 +49,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error("MIGRATE_DATABASE_URL must differ from DATABASE_URL in production");
   }
 
+  const purgeGraceMs = parsePositiveInt(env.PURGE_GRACE_MS, DEFAULT_PURGE_GRACE_MS, "PURGE_GRACE_MS");
+  const purgeSweepIntervalMs = parsePositiveInt(
+    env.PURGE_SWEEP_INTERVAL_MS,
+    DEFAULT_PURGE_SWEEP_INTERVAL_MS,
+    "PURGE_SWEEP_INTERVAL_MS",
+  );
+
   return {
     port,
     databaseUrl,
@@ -53,6 +66,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dbConnectionTimeoutMs,
     dbStatementTimeoutMs,
     dbOperationTimeoutMs,
+    purgeGraceMs,
+    purgeSweepIntervalMs,
   };
 }
 

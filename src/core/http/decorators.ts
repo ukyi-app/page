@@ -6,7 +6,7 @@ export const CONTROLLER_PATH = Symbol("controller:path");
 export const ROUTES = Symbol("controller:routes");
 export const GUARDS = Symbol("controller:guards");
 
-export type HttpMethod = "get" | "put" | "post";
+export type HttpMethod = "get" | "put" | "post" | "delete";
 
 export interface RouteDef {
   method: HttpMethod;
@@ -47,6 +47,7 @@ function methodDecorator(method: HttpMethod) {
 export const Get = methodDecorator("get");
 export const Put = methodDecorator("put");
 export const Post = methodDecorator("post");
+export const Delete = methodDecorator("delete");
 
 export function UseGuard(guard: GuardClass): ClassDecorator {
   return (target) => {
