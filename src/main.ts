@@ -1,7 +1,8 @@
-import { loadConfig } from "./config";
-import { createPool, migrate } from "./db";
-import { PageRepository } from "./pageRepository";
-import { createServer } from "./server";
+import "reflect-metadata";
+import { loadConfig } from "./core/config/config";
+import { createPool, migrate } from "./core/database/db";
+import { PageRepository } from "./modules/pages/pages.repository";
+import { createApp } from "./app.module";
 
 const config = loadConfig();
 const dbTimeouts = {
@@ -15,14 +16,11 @@ await migrate(migrationPool, config.databaseUrl);
 await migrationPool.end();
 
 const pages = new PageRepository(runtimePool);
-const server = createServer({
-  config,
-  pages,
-});
+const app = createApp({ config, pages });
 
 Bun.serve({
   port: config.port,
-  fetch: server.fetch,
+  fetch: app.fetch,
 });
 
 console.log(`page listening on :${config.port}`);

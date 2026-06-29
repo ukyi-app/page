@@ -11,4 +11,4 @@ COPY package.json tsconfig.json ./
 COPY src ./src
 USER bun
 EXPOSE 8080
-CMD ["bun", "src/index.ts"]
+CMD ["bun", "src/main.ts"]

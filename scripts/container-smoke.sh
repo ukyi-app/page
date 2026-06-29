@@ -28,9 +28,9 @@ docker run -d --name "$CONTAINER_NAME" \
   "$IMAGE" >/dev/null
 
 for i in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:18080/readyz >/dev/null 2>&1; then break; fi
+  if curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1; then break; fi
   sleep 1
 done
 
-curl -fsS http://127.0.0.1:18080/readyz >/dev/null
+curl -fsS http://127.0.0.1:18080/health >/dev/null
 BASE_URL=http://127.0.0.1:18080 ADMIN_TOKEN="$ADMIN_TOKEN" bun run smoke
