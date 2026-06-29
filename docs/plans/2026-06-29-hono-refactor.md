@@ -740,8 +740,6 @@ import {
 } from "./decorators";
 import { error } from "./responses";
 
-const ALL = "ALL" as const;
-
 function methodNotAllowed(): Response {
   return error("method_not_allowed", 405);
 }
@@ -785,15 +783,15 @@ export const RouterFactory = {
       }
     }
 
-    // 3. 405 catch-all
+    // 3. 405 catch-all (app.all = 모든 메서드. Hono엔 'ALL' 의사 메서드가 없으므로 app.all 사용)
     for (const m of metas) {
       const exact = m.routes.filter((r) => !r.path.includes("*"));
       if (m.base) {
-        app.on(ALL, m.base, methodNotAllowed);
-        app.on(ALL, `${m.base}/*`, methodNotAllowed);
+        app.all(m.base, methodNotAllowed);
+        app.all(`${m.base}/*`, methodNotAllowed);
       } else {
         for (const route of exact) {
-          app.on(ALL, joinPath(m.base, route.path), methodNotAllowed);
+          app.all(joinPath(m.base, route.path), methodNotAllowed);
         }
       }
     }
@@ -807,7 +805,7 @@ export const RouterFactory = {
     }
 
     // 5. 전역 폴백
-    app.on(ALL, "*", methodNotAllowed);
+    app.all("*", methodNotAllowed);
   },
 };
 
@@ -817,7 +815,7 @@ function bind(app: Hono, route: RouteDef, full: string, instance: ControllerInst
   app[route.method](full, handler);
 }
 ```
-> 주의: Hono의 라우팅 우선순위는 **등록 순서**다. 위 1→5 단계가 그 순서를 결정적으로 보장한다. `app.on('ALL', ...)`로 모든 메서드를 잡는 405 폴백을 만든다. (Hono `app.all`도 동일하나 `app.on(method, path)` 형태를 사용해 의도를 명확히 한다.)
+> 주의: Hono의 라우팅 우선순위는 **등록 순서**다. 위 1→5 단계가 그 순서를 결정적으로 보장한다. 모든 메서드를 잡는 405 폴백은 `app.all(path, handler)`로 만든다(Hono엔 `app.on`용 'ALL' 의사 메서드가 없으므로 `app.all` 사용).
 
 **Step 4: 통과 확인** — `bun test tests/unit/core/router-factory.test.ts` → 9 pass. 한 케이스라도 실패하면 등록 순서/매칭을 디버그(예: `app.on(ALL, base+'/*')` 위치, `joinPath` 빈 경로 처리).
 
