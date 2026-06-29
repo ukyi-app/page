@@ -1,16 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import type { Hono } from "hono";
 import type { Pool } from "pg";
 import type { AppConfig } from "../../src/core/config/config";
 import { PageRepository } from "../../src/modules/pages/pages.repository";
-import { createApp } from "../../src/app.module";
+import { AppModule } from "../../src/app.module";
+import { buildApp } from "../../src/core/app-factory";
+import { PAGES_REPOSITORY } from "../../src/modules/pages/pages.contract";
 import { createMigratorTestPool, createTestPool } from "./helpers";
 
 const adminToken = "secret";
 const adminHash = createHash("sha256").update(adminToken).digest("hex");
 
 let pool: Pool;
-let server: ReturnType<typeof createApp>;
+let server: Hono;
 
 function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -29,7 +32,7 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 
 beforeEach(async () => {
   pool = await createTestPool();
-  server = createApp({
+  server = await createApp({
     config: testConfig(),
     pages: new PageRepository(pool),
   });
@@ -41,6 +44,16 @@ afterEach(async () => {
 
 function req(path: string, init?: RequestInit): Request {
   return new Request(`https://page.test${path}`, init);
+}
+
+// 테스트 seam: buildApp을 실제 PageRepository override + skipMigration으로 감싸 Hono 앱을 반환.
+async function createApp(deps: { config: AppConfig; pages: PageRepository }): Promise<Hono> {
+  const { app } = await buildApp(AppModule, {
+    config: deps.config,
+    providerOverrides: [{ provide: PAGES_REPOSITORY, useValue: deps.pages }],
+    skipMigration: true,
+  });
+  return app;
 }
 
 function adminJson(body: unknown): RequestInit {
@@ -198,7 +211,7 @@ describe("server routes with Postgres", () => {
     await pool.end();
     pool = await createTestPool({ statementTimeoutMs: 50 });
     const pages = new PageRepository(pool);
-    server = createApp({
+    server = await createApp({
       config: testConfig({ dbStatementTimeoutMs: 50, dbOperationTimeoutMs: 200 }),
       pages,
     });
@@ -225,7 +238,7 @@ describe("server routes with Postgres", () => {
   test("timed-out writes roll back before returning 503", async () => {
     await pool.end();
     pool = await createTestPool({ statementTimeoutMs: 50 });
-    server = createApp({
+    server = await createApp({
       config: testConfig({ dbStatementTimeoutMs: 50, dbOperationTimeoutMs: 200 }),
       pages: new PageRepository(pool),
     });

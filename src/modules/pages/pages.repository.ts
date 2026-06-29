@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
+import { Inject, Service } from "../../core/di/decorators";
+import { PG_POOL } from "../../core/database/database.tokens";
 
 export type PageMetadata = {
   path: string;
@@ -32,8 +34,9 @@ export class PageConflictError extends Error {
 
 export class PageNotFoundError extends Error {}
 
+@Service()
 export class PageRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
   async getCurrentPage(path: string): Promise<RenderedPage | null> {
     const result = await this.pool.query(

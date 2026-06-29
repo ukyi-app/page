@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { createApp } from "../../src/app.module";
+import { AppModule } from "../../src/app.module";
+import { buildApp } from "../../src/core/app-factory";
+import { PAGES_REPOSITORY } from "../../src/modules/pages/pages.contract";
 import type { PageMetadata, RenderedPage, RollbackPageInput, SavePageInput } from "../../src/modules/pages/pages.repository";
 
 const adminHash = createHash("sha256").update("secret").digest("hex");
@@ -80,9 +82,19 @@ function request(path: string, init?: RequestInit) {
   return new Request(`https://page.test${path}`, init);
 }
 
+// 테스트 seam: buildApp을 fake repository override + skipMigration으로 감싸 Hono 앱을 반환.
+async function createApp(deps: { config: typeof config; pages: FakePages }) {
+  const { app } = await buildApp(AppModule, {
+    config: deps.config,
+    providerOverrides: [{ provide: PAGES_REPOSITORY, useValue: deps.pages }],
+    skipMigration: true,
+  });
+  return app;
+}
+
 describe("createApp", () => {
   test("serves the chart health endpoint", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     const response = await server.fetch(request("/health"));
 
     expect(response.status).toBe(200);
@@ -90,7 +102,7 @@ describe("createApp", () => {
   });
 
   test("rejects unauthenticated writes", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     const response = await server.fetch(request("/api/pages", { method: "PUT", body: "{}" }));
 
     expect(response.status).toBe(401);
@@ -109,7 +121,7 @@ describe("createApp", () => {
         const pages = new FakePages();
         const headers = new Headers(candidate.init?.headers);
         if (authorization) headers.set("authorization", authorization);
-        const server = createApp({ config, pages });
+        const server = await createApp({ config, pages });
         const response = await server.fetch(request(candidate.path, { ...candidate.init, headers }));
 
         expect(response.status).toBe(401);
@@ -120,7 +132,7 @@ describe("createApp", () => {
 
   test("writes with admin auth and renders exact html", async () => {
     const pages = new FakePages();
-    const server = createApp({ config, pages });
+    const server = await createApp({ config, pages });
     const put = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -137,7 +149,7 @@ describe("createApp", () => {
   });
 
   test("rejects oversized html", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -150,7 +162,7 @@ describe("createApp", () => {
   });
 
   test("accepts escaped HTML at the decoded HTML byte limit", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     const escaped = '"'.repeat(100);
     const response = await server.fetch(
       request("/api/pages", {
@@ -165,7 +177,7 @@ describe("createApp", () => {
   });
 
   test("checks auth before reading an oversized body", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -178,7 +190,7 @@ describe("createApp", () => {
   });
 
   test("rejects oversized raw JSON before parsing", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -202,7 +214,7 @@ describe("createApp", () => {
 
     for (const candidate of cases) {
       const pages = new FakePages();
-      const server = createApp({ config, pages });
+      const server = await createApp({ config, pages });
       const response = await server.fetch(
         request(candidate.path, {
           method: candidate.method,
@@ -228,7 +240,7 @@ describe("createApp", () => {
 
     for (const candidate of cases) {
       const pages = new FakePages();
-      const server = createApp({ config, pages });
+      const server = await createApp({ config, pages });
       const response = await server.fetch(
         request("/api/pages/rollback", {
           method: "POST",
@@ -244,7 +256,7 @@ describe("createApp", () => {
   });
 
   test("maps render repository failures to stable 503", async () => {
-    const server = createApp({ config, pages: new ThrowingPages() });
+    const server = await createApp({ config, pages: new ThrowingPages() });
     const response = await server.fetch(request("/demo"));
 
     expect(response.status).toBe(503);
@@ -252,7 +264,7 @@ describe("createApp", () => {
   });
 
   test("maps hanging repository calls to stable 503 before infrastructure timeout", async () => {
-    const server = createApp({ config, pages: new HangingPages() });
+    const server = await createApp({ config, pages: new HangingPages() });
     const response = await server.fetch(request("/demo"));
 
     expect(response.status).toBe(503);
@@ -260,7 +272,7 @@ describe("createApp", () => {
   });
 
   test("maps admin repository failures to stable 503", async () => {
-    const server = createApp({ config, pages: new ThrowingPages() });
+    const server = await createApp({ config, pages: new ThrowingPages() });
     const response = await server.fetch(
       request("/api/pages", {
         method: "PUT",
@@ -274,28 +286,28 @@ describe("createApp", () => {
   });
 
   test("authed unknown admin subpath returns 405", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     const r = await server.fetch(request("/api/pages/foo", { headers: { authorization: "Bearer secret" } }));
     expect(r.status).toBe(405);
   });
 
   test("unauthed unknown admin subpath returns 401", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     expect((await server.fetch(request("/api/pages/foo"))).status).toBe(401);
   });
 
   test("non-GET on render path returns 405", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     expect((await server.fetch(request("/demo", { method: "POST" }))).status).toBe(405);
   });
 
   test("non-GET on /health returns 405", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     expect((await server.fetch(request("/health", { method: "POST" }))).status).toBe(405);
   });
 
   test("GET /api/foo (reserved) returns 404 after auth-free render path", async () => {
-    const server = createApp({ config, pages: new FakePages() });
+    const server = await createApp({ config, pages: new FakePages() });
     // /api/foo는 admin 경로가 아니므로 가드 없음 → 렌더 → 예약 → 404
     expect((await server.fetch(request("/api/foo"))).status).toBe(404);
   });
