@@ -71,6 +71,19 @@ export const RouterFactory = {
 
     // 5. 전역 폴백
     app.all("*", methodNotAllowed);
+
+    // 6. HEAD 폴백 조정: Hono(#dispatch)는 HEAD를 GET 라우트로 자동 응답하지만, 구 서버는
+    // HEAD를 비-GET 메서드로 취급해 405(미인증 admin은 가드가 먼저 401)를 반환했다.
+    // byte-identical 보존을 위해 HEAD를 GET에 매칭되지 않는 합성 메서드로 재디스패치해
+    // 405 catch-all / 가드 경로로 흘려보낸다.
+    const honoFetch = app.fetch;
+    app.fetch = ((...args: Parameters<typeof honoFetch>) => {
+      const [request, ...rest] = args;
+      if (request.method === "HEAD") {
+        return honoFetch(new Request(request, { method: "REPORT" }), ...rest);
+      }
+      return honoFetch(...args);
+    }) as typeof app.fetch;
   },
 };
 
