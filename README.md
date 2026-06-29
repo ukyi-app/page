@@ -97,18 +97,27 @@ positive integer `revisionId`, and `expectedContentSha256`.
 
 ## Local Development
 
+`loadConfig` reads the homelab conn-handle names first (`PAGE_DATABASE_URL`,
+`PAGE_MIGRATE_DATABASE_URL`) and falls back to the unprefixed `DATABASE_URL` /
+`MIGRATE_DATABASE_URL`. Locally, put the prefixed keys in `.env.local` (Bun auto-loads it; it's
+gitignored):
+
 ```bash
 docker compose -f docker-compose.test.yaml up -d
-export DATABASE_URL=postgres://page_runtime:runtime@localhost:15432/page_test
-export MIGRATE_DATABASE_URL=postgres://page_migrator:migrator@localhost:15432/page_test
-export ADMIN_TOKEN=local-admin-token
-export ADMIN_TOKEN_SHA256=$(printf '%s' "$ADMIN_TOKEN" | bun run token:hash)
+ADMIN_TOKEN=local-admin-token
+cat > .env.local <<EOF
+PAGE_DATABASE_URL=postgres://page_runtime:runtime@localhost:15432/page_test
+PAGE_MIGRATE_DATABASE_URL=postgres://page_migrator:migrator@localhost:15432/page_test
+ADMIN_TOKEN_SHA256=$(printf '%s' "$ADMIN_TOKEN" | bun run token:hash)
+EOF
 bun install
 bun run dev
 ```
 
 `local-admin-token` is for local development only. Production tokens must be generated from at
-least 32 random bytes and must never be human-chosen.
+least 32 random bytes and must never be human-chosen. In production these values are not in
+`.env` — `PAGE_*` come from the `db-page-conn` SealedSecret and `ADMIN_TOKEN_SHA256` from the
+app's sealed secret.
 
 ## Testing
 
