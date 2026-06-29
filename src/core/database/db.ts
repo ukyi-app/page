@@ -64,8 +64,17 @@ export async function migrate(pool: Pool, runtimeDatabaseUrl: string): Promise<v
         end if;
       end $$;
     `);
+    // soft delete: disabled_at(비활성 시각, null=활성), purge_after(이 시각 이후 완전 삭제 대상).
+    await client.query("alter table pages add column if not exists disabled_at timestamptz");
+    await client.query("alter table pages add column if not exists purge_after timestamptz");
+    await client.query(`
+      create index if not exists pages_purge_after_idx
+      on pages (purge_after)
+      where purge_after is not null
+    `);
     await client.query(`grant usage on schema public to ${runtimeRole}`);
-    await client.query(`grant select, insert, update on table pages to ${runtimeRole}`);
+    // update: soft delete/restore(disabled_at·purge_after) 갱신. delete: purge 스윕(리비전은 cascade).
+    await client.query(`grant select, insert, update, delete on table pages to ${runtimeRole}`);
     await client.query(`grant select, insert on table page_revisions to ${runtimeRole}`);
     await client.query(`grant usage, select on all sequences in schema public to ${runtimeRole}`);
     await client.query("commit");

@@ -26,7 +26,7 @@ export interface BuildAppOptions {
 export async function buildApp(
   rootModule: AnyClass,
   options: BuildAppOptions = {},
-): Promise<{ app: Hono; config: ConfigService }> {
+): Promise<{ app: Hono; config: ConfigService; container: DependencyContainer }> {
   const c = container.createChildContainer();
   c.registerInstance(APP_CONFIG, options.config ?? loadConfig());
   for (const provider of collectProviders(rootModule)) registerProvider(c, provider);
@@ -50,7 +50,7 @@ export async function buildApp(
   // 컨트롤러 등록 순서는 RouterFactory가 단계로 강제하므로 결과에 영향 없음(불변식).
   const controllers = collectControllers(rootModule).map((C) => c.resolve(C as never) as object);
   RouterFactory.register(app, controllers, c);
-  return { app, config };
+  return { app, config, container: c };
 }
 
 function registerProvider(c: DependencyContainer, provider: Provider): void {
