@@ -1,12 +1,11 @@
-import "reflect-metadata";
 import type { Context } from "hono";
-import { injectable } from "tsyringe";
+import { Injectable } from "../di/decorators";
 import { verifyBearerToken } from "./auth-token";
 import { ConfigService } from "../config/config.service";
 import type { CanActivate } from "../http/decorators";
 import { error } from "../http/responses";
 
-@injectable()
+@Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private readonly config: ConfigService) {}
 

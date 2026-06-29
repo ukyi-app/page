@@ -1,6 +1,4 @@
-import "reflect-metadata";
 import type { Context } from "hono";
-import { injectable } from "tsyringe";
 import { AuthGuard } from "../../core/auth/auth.guard";
 import { readBoundedJson, byteLength } from "../../core/http/bounded-json";
 import { RequestTooLargeError, BadRequestError } from "../../core/http/http-errors";
@@ -13,7 +11,6 @@ import {
   parsePositiveRevisionId, parseRequiredExpectedContentSha256,
 } from "./pages.validation";
 
-@injectable()
 @Controller("/api/pages")
 @UseGuard(AuthGuard)
 export class PagesAdminController {

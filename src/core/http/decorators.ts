@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import type { MiddlewareHandler } from "hono";
+import { applyInjectable } from "../di/decorators";
 
 export const CONTROLLER_PATH = Symbol("controller:path");
 export const ROUTES = Symbol("controller:routes");
@@ -24,8 +25,11 @@ export type GuardClass = new (...args: any[]) => CanActivate;
 // biome-ignore lint: tsyringe 데코레이터 타깃 타입
 type Ctor = Function;
 
+// @Controller는 injectable을 자동 적용한다 → 컨트롤러에 별도 @injectable 불필요.
+// basePath 기본값 ""이라 @Controller() 무인자도 동작(루트 컨트롤러).
 export function Controller(basePath = ""): ClassDecorator {
   return (target) => {
+    applyInjectable(target);
     Reflect.defineMetadata(CONTROLLER_PATH, basePath, target);
   };
 }

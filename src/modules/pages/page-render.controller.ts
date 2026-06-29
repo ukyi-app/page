@@ -1,14 +1,11 @@
-import "reflect-metadata";
 import type { Context } from "hono";
-import { injectable } from "tsyringe";
 import { Controller, Get } from "../../core/http/decorators";
 import { error } from "../../core/http/responses";
 import { canonicalizePagePath } from "../../core/path/page-path";
 import { renderHeaders } from "../../core/render/render-headers";
 import { PagesService } from "./pages.service";
 
-@injectable()
-@Controller("")
+@Controller()
 export class PageRenderController {
   constructor(private readonly pages: PagesService) {}
 

@@ -1,10 +1,10 @@
-import "reflect-metadata";
-import { injectable } from "tsyringe";
+import { Inject, Service } from "../di/decorators";
+import { APP_CONFIG } from "./config.tokens";
 import type { AppConfig } from "./config";
 
-@injectable()
+@Service()
 export class ConfigService {
-  constructor(private readonly cfg: AppConfig) {}
+  constructor(@Inject(APP_CONFIG) private readonly cfg: AppConfig) {}
   get port(): number { return this.cfg.port; }
   get databaseUrl(): string { return this.cfg.databaseUrl; }
   get migrateDatabaseUrl(): string { return this.cfg.migrateDatabaseUrl; }

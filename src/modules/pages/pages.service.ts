@@ -1,15 +1,14 @@
-import "reflect-metadata";
-import { inject, injectable } from "tsyringe";
+import { Inject, Service } from "../../core/di/decorators";
 import { ConfigService } from "../../core/config/config.service";
 import { PAGES_REPOSITORY, type PageRepositoryContract } from "./pages.contract";
 import type {
   PageMetadata, RenderedPage, RollbackPageInput, SavePageInput,
 } from "./pages.repository";
 
-@injectable()
+@Service()
 export class PagesService {
   constructor(
-    @inject(PAGES_REPOSITORY) private readonly pages: PageRepositoryContract,
+    @Inject(PAGES_REPOSITORY) private readonly pages: PageRepositoryContract,
     private readonly config: ConfigService,
   ) {}
 

@@ -1,7 +1,7 @@
-import type { DependencyContainer } from "tsyringe";
+import { Module } from "../../core/di/module";
 import { HealthController } from "./health.controller";
 
-export const HealthModule = {
-  register(_container: DependencyContainer): void {},
+@Module({
   controllers: [HealthController],
-};
+})
+export class HealthModule {}

@@ -1,9 +1,11 @@
-import type { DependencyContainer } from "tsyringe";
+import { Module } from "../../core/di/module";
+import { AuthGuard } from "../../core/auth/auth.guard";
 import { PageRenderController } from "./page-render.controller";
 import { PagesAdminController } from "./pages.admin.controller";
+import { PagesService } from "./pages.service";
 
-export const PagesModule = {
-  // 컨트롤러는 합성 루트에서 resolve. 등록할 추가 프로바이더가 없으면 no-op.
-  register(_container: DependencyContainer): void {},
+@Module({
   controllers: [PagesAdminController, PageRenderController],
-};
+  providers: [PagesService, AuthGuard],
+})
+export class PagesModule {}
