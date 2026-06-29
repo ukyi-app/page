@@ -1,0 +1,27 @@
+{
+  "name": "page",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.10",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "test": "bun run test:unit && bun run test:integration",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test --max-concurrency=1 tests/integration",
+    "typecheck": "tsc --noEmit",
+    "token:hash": "bun scripts/hash-token.ts",
+    "secret:seal": "bun tools/seal-secret.mts --config .app-config.yml --env .env",
+    "smoke": "scripts/smoke.sh",
+    "smoke:container": "scripts/container-smoke.sh"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/pg": "^8.11.10",
+    "typescript": "^6.0.3"
+  }
+}
