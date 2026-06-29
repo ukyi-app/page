@@ -1,0 +1,8 @@
+kind: service
+resources:
+  requests: { cpu: 50m, memory: 96Mi }
+  limits: { cpu: 300m, memory: 256Mi }
+route:
+  public: true
+deploy:
+  autoDeploy: true
