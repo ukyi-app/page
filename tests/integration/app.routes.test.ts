@@ -133,6 +133,50 @@ describe("server routes with Postgres", () => {
     expect(await (await server.fetch(req("/demo"))).text()).toBe("v1");
   });
 
+  test("soft delete lifecycle: list, disable, source, restore over HTTP", async () => {
+    const bearer = { authorization: `Bearer ${adminToken}` };
+    await server.fetch(req("/api/pages", adminJson({ path: "/demo", html: "<h1>hi</h1>" })));
+
+    expect((await server.fetch(req("/demo"))).status).toBe(200);
+
+    const del = await server.fetch(req("/api/pages?path=/demo", { method: "DELETE", headers: bearer }));
+    expect(del.status).toBe(200);
+    const delBody = (await del.json()) as { disabledAt: string | null; purgeAfter: string | null };
+    expect(delBody.disabledAt).not.toBeNull();
+    expect(delBody.purgeAfter).toBeTruthy();
+
+    // 렌더·메타데이터는 404, source는 원본 유지
+    expect((await server.fetch(req("/demo"))).status).toBe(404);
+    expect((await server.fetch(req("/api/pages?path=/demo", { headers: bearer }))).status).toBe(404);
+    const src = await server.fetch(req("/api/pages/source?path=/demo", { headers: bearer }));
+    expect(src.status).toBe(200);
+    expect(((await src.json()) as { html: string }).html).toBe("<h1>hi</h1>");
+
+    // 목록은 비활성 포함
+    const list = (await (await server.fetch(req("/api/pages/list", { headers: bearer }))).json()) as {
+      pages: Array<{ path: string; disabledAt: string | null }>;
+    };
+    expect(list.pages.find((p) => p.path === "/demo")?.disabledAt).not.toBeNull();
+
+    // restore → 다시 공개
+    const restore = await server.fetch(
+      req("/api/pages/restore", {
+        method: "POST",
+        headers: { ...bearer, "content-type": "application/json" },
+        body: JSON.stringify({ path: "/demo" }),
+      }),
+    );
+    expect(restore.status).toBe(200);
+    expect(await (await server.fetch(req("/demo"))).text()).toBe("<h1>hi</h1>");
+  });
+
+  test("DELETE on a missing page returns 404", async () => {
+    const del = await server.fetch(
+      req("/api/pages?path=/missing", { method: "DELETE", headers: { authorization: `Bearer ${adminToken}` } }),
+    );
+    expect(del.status).toBe(404);
+  });
+
   test("returns stable errors for bad requests and conflicts", async () => {
     const invalidJson = await server.fetch(
       req("/api/pages", {

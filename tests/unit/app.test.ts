@@ -21,10 +21,18 @@ const config = {
 class FakePages {
   current: RenderedPage | null = null;
   revisions: PageMetadata[] = [];
+  disabled = false;
+  purgeAfter: string | null = null;
   calls: string[] = [];
 
   async getCurrentPage(path: string) {
     this.calls.push("getCurrentPage");
+    if (this.disabled) return null;
+    return this.current?.path === path ? this.current : null;
+  }
+
+  async getCurrentSource(path: string) {
+    this.calls.push("getCurrentSource");
     return this.current?.path === path ? this.current : null;
   }
 
@@ -34,6 +42,15 @@ class FakePages {
     if (!page) return null;
     const { html: _html, ...metadata } = page;
     return metadata;
+  }
+
+  async listPages() {
+    this.calls.push("listPages");
+    if (!this.current) return [];
+    const { html: _html, ...metadata } = this.current;
+    return [
+      { ...metadata, disabledAt: this.disabled ? new Date(0).toISOString() : null, purgeAfter: this.purgeAfter },
+    ];
   }
 
   async listRevisions() {
@@ -51,6 +68,8 @@ class FakePages {
     };
     this.current = { ...meta, html: input.html };
     this.revisions = [meta];
+    this.disabled = false;
+    this.purgeAfter = null;
     return meta;
   }
 
@@ -59,6 +78,29 @@ class FakePages {
     if (!this.revisions[0]) throw new Error("missing");
     this.current = { ...this.revisions[0], html: "rolled-back" };
     return this.revisions[0];
+  }
+
+  async softDeletePage(input: { path: string; purgeAfter: string }) {
+    this.calls.push("softDeletePage");
+    if (!this.current) throw new Error("missing");
+    this.disabled = true;
+    this.purgeAfter = input.purgeAfter;
+    const { html: _html, ...metadata } = this.current;
+    return { ...metadata, disabledAt: new Date(0).toISOString(), purgeAfter: input.purgeAfter };
+  }
+
+  async restorePage(_path: string) {
+    this.calls.push("restorePage");
+    if (!this.current) throw new Error("missing");
+    this.disabled = false;
+    this.purgeAfter = null;
+    const { html: _html, ...metadata } = this.current;
+    return { ...metadata, disabledAt: null, purgeAfter: null };
+  }
+
+  async purgeExpired(_now: string) {
+    this.calls.push("purgeExpired");
+    return 0;
   }
 }
 
@@ -112,7 +154,11 @@ describe("createApp", () => {
     const cases: Array<{ path: string; init?: RequestInit }> = [
       { path: "/api/pages", init: { method: "PUT", headers: { "content-type": "application/json" }, body: "{" } },
       { path: "/api/pages?path=/demo" },
+      { path: "/api/pages/list" },
+      { path: "/api/pages/source?path=/demo" },
       { path: "/api/pages/revisions?path=/demo" },
+      { path: "/api/pages?path=/demo", init: { method: "DELETE" } },
+      { path: "/api/pages/restore", init: { method: "POST", headers: { "content-type": "application/json" }, body: "{" } },
       { path: "/api/pages/rollback", init: { method: "POST", headers: { "content-type": "application/json" }, body: "{" } },
     ];
 
@@ -310,5 +356,53 @@ describe("createApp", () => {
     const server = await createApp({ config, pages: new FakePages() });
     // /api/foo는 admin 경로가 아니므로 가드 없음 → 렌더 → 예약 → 404
     expect((await server.fetch(request("/api/foo"))).status).toBe(404);
+  });
+
+  test("lists pages including soft-deleted, and soft delete hides render/metadata but keeps source; restore re-enables", async () => {
+    const pages = new FakePages();
+    const server = await createApp({ config, pages });
+    const auth = { authorization: "Bearer secret", "content-type": "application/json" };
+    const bearer = { authorization: "Bearer secret" };
+
+    await server.fetch(
+      request("/api/pages", { method: "PUT", headers: auth, body: JSON.stringify({ path: "/demo", html: "<h1>hi</h1>" }) }),
+    );
+    expect((await server.fetch(request("/demo"))).status).toBe(200);
+
+    // soft delete
+    const del = await server.fetch(request("/api/pages?path=/demo", { method: "DELETE", headers: bearer }));
+    expect(del.status).toBe(200);
+    const delBody = (await del.json()) as { disabledAt: string | null; purgeAfter: string | null };
+    expect(delBody.disabledAt).not.toBeNull();
+    expect(delBody.purgeAfter).toBeTruthy();
+
+    // 렌더·메타데이터는 가려지고, source는 원본 html 유지
+    expect((await server.fetch(request("/demo"))).status).toBe(404);
+    expect((await server.fetch(request("/api/pages?path=/demo", { headers: bearer }))).status).toBe(404);
+    const src = await server.fetch(request("/api/pages/source?path=/demo", { headers: bearer }));
+    expect(src.status).toBe(200);
+    expect(((await src.json()) as { html: string }).html).toBe("<h1>hi</h1>");
+
+    // 목록은 비활성 포함
+    const list = await server.fetch(request("/api/pages/list", { headers: bearer }));
+    const listBody = (await list.json()) as { pages: Array<{ disabledAt: string | null }> };
+    expect(listBody.pages).toHaveLength(1);
+    expect(listBody.pages[0]?.disabledAt).not.toBeNull();
+
+    // restore → 다시 공개
+    const restore = await server.fetch(
+      request("/api/pages/restore", { method: "POST", headers: auth, body: JSON.stringify({ path: "/demo" }) }),
+    );
+    expect(restore.status).toBe(200);
+    expect((await server.fetch(request("/demo"))).status).toBe(200);
+  });
+
+  test("DELETE rejects an invalid path before repository access", async () => {
+    const pages = new FakePages();
+    const server = await createApp({ config, pages });
+    const r = await server.fetch(request("/api/pages?path=not-a-path", { method: "DELETE", headers: { authorization: "Bearer secret" } }));
+    expect(r.status).toBe(400);
+    expect(await r.json()).toEqual({ error: "invalid_path" });
+    expect(pages.calls).toEqual([]);
   });
 });
