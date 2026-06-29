@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+/* IBM Plex Mono — latin woff2만 인라인(단일 HTML 경량화). 한글은 폰트에 없어 시스템 mono로 폴백. */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+}
+
+/* page admin — "engineering console": deep slate + amber phosphor, IBM Plex Mono 시그니처 */
+:root {
+  --background: #0a0b0e;
+  --foreground: #e9e7e1;
+  --card: #111317;
+  --card-foreground: #e9e7e1;
+  --popover: #14171c;
+  --popover-foreground: #e9e7e1;
+  --primary: #f4b740;
+  --primary-foreground: #1a1303;
+  --secondary: #1a1e24;
+  --secondary-foreground: #e9e7e1;
+  --muted: #14171c;
+  --muted-foreground: #888d97;
+  --accent: #1c2128;
+  --accent-foreground: #f4b740;
+  --destructive: #e5484d;
+  --destructive-foreground: #fdecec;
+  --success: #4cc38a;
+  --warning: #f4b740;
+  --border: #23272f;
+  --input: #2a2f38;
+  --ring: #f4b740;
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-mono);
+    font-feature-settings: "liga" 0;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* console 분위기: 상단 앰버 글로우 + 미세한 도트 그리드 */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(60rem 40rem at 78% -10%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%),
+      radial-gradient(40rem 30rem at 0% 0%, color-mix(in oklab, #3a6df0 8%, transparent), transparent 60%),
+      linear-gradient(180deg, #0c0e12 0%, var(--background) 40%);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.4;
+    background-image: radial-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent 80%);
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 35%, transparent);
+    color: var(--foreground);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 99px;
+    border: 2px solid var(--background);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #353b45;
+  }
+}
+
+@layer utilities {
+  .glow-ring {
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 40%, transparent),
+      0 0 24px -4px color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  .animate-in {
+    animation: fade-in 0.18s ease-out both;
+  }
+  .animate-pop {
+    animation: pop-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+}
