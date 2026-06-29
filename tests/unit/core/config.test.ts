@@ -29,6 +29,36 @@ describe("loadConfig", () => {
     expect(config.migrateDatabaseUrl).toContain("migrator");
   });
 
+  test("prefers PAGE_DATABASE_URL (homelab conn handle) over DATABASE_URL", () => {
+    const config = loadConfig({
+      PAGE_DATABASE_URL: "postgres://pooler/page",
+      DATABASE_URL: "postgres://fallback/page",
+      ADMIN_TOKEN_SHA256: "a".repeat(64),
+    });
+
+    expect(config.databaseUrl).toBe("postgres://pooler/page");
+  });
+
+  test("reads PAGE_MIGRATE_DATABASE_URL for the migration url", () => {
+    const config = loadConfig({
+      PAGE_DATABASE_URL: "postgres://pooler/page",
+      PAGE_MIGRATE_DATABASE_URL: "postgres://direct/page",
+      ADMIN_TOKEN_SHA256: "a".repeat(64),
+    });
+
+    expect(config.migrateDatabaseUrl).toBe("postgres://direct/page");
+  });
+
+  test("PAGE_DATABASE_URL alone satisfies the database url (local .env.local)", () => {
+    const config = loadConfig({
+      PAGE_DATABASE_URL: "postgres://local/page",
+      ADMIN_TOKEN_SHA256: "a".repeat(64),
+    });
+
+    expect(config.databaseUrl).toBe("postgres://local/page");
+    expect(config.migrateDatabaseUrl).toBe("postgres://local/page");
+  });
+
   test("requires separate migrator and runtime URLs in production", () => {
     expect(() =>
       loadConfig({

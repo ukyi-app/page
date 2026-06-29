@@ -13,8 +13,10 @@ export type AppConfig = {
 const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
-  const databaseUrl = env.DATABASE_URL;
-  if (!databaseUrl) throw new Error("DATABASE_URL is required");
+  // homelab conn 핸들(db-page-conn)은 PAGE_DATABASE_URL(런타임/풀러)·PAGE_MIGRATE_DATABASE_URL(직결)로
+  // 주입된다. 프리픽스 키를 우선 읽고, 로컬(.env.local)·테스트의 비프리픽스 키로 폴백한다.
+  const databaseUrl = env.PAGE_DATABASE_URL || env.DATABASE_URL;
+  if (!databaseUrl) throw new Error("PAGE_DATABASE_URL or DATABASE_URL is required");
 
   const adminTokenSha256 = env.ADMIN_TOKEN_SHA256;
   if (!adminTokenSha256 || !SHA256_HEX_RE.test(adminTokenSha256)) {
@@ -36,7 +38,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error("DB_OPERATION_TIMEOUT_MS must be greater than DB_CONNECTION_TIMEOUT_MS and DB_STATEMENT_TIMEOUT_MS");
   }
 
-  const migrateDatabaseUrl = env.MIGRATE_DATABASE_URL || databaseUrl;
+  const migrateDatabaseUrl = env.PAGE_MIGRATE_DATABASE_URL || env.MIGRATE_DATABASE_URL || databaseUrl;
   if (env.NODE_ENV === "production" && migrateDatabaseUrl === databaseUrl) {
     throw new Error("MIGRATE_DATABASE_URL must differ from DATABASE_URL in production");
   }
