@@ -76,8 +76,25 @@ src/
   `main.ts`와 테스트 preload에서 `reflect-metadata`를 **최우선** import(데코레이터 클래스 로드 전).
 - **RouterFactory(직접 구현)**: `@Controller(base)`·`@Get/@Put/@Post(path)`·`@UseGuard(Guard)`
   메타데이터를 읽어 컨트롤러 인스턴스를 Hono에 바인딩. 가드는 base + `/*`에 `app.use`로 **핸들러보다
-  먼저** 적용(인증→바디 순서 보존). 정적 경로가 와일드카드보다 우선(Hono trie). 경로별 `all()` 405
-  폴백 + 전역 `all('*')` 405 폴백을 마지막에 등록.
+  먼저** 적용(인증→바디 순서 보존).
+
+### RouterFactory 등록 순서 불변식 (필수)
+
+Hono의 라우팅 우선순위는 **등록 순서**다(겹치는 패턴은 먼저 등록된 핸들러가 매칭/실행되어 승리).
+"정적이 와일드카드보다 우선"이라는 가정은 **틀렸으며**, 렌더 `@Get('*')`를 먼저 등록하면 `/health`·
+admin 라우트를 선점한다. 따라서 RouterFactory는 모듈 import 순서가 아니라 **결정적 단계(phase/
+priority)로 다음 순서를 강제**한다:
+
+1. AuthGuard 미들웨어: `/api/pages` + `/api/pages/*`
+2. admin **정확** 라우트: `PUT /api/pages`, `GET /api/pages`, `GET /api/pages/revisions`, `POST /api/pages/rollback`
+3. **admin-prefix 405 catch-all**: `all('/api/pages')` + `all('/api/pages/*')` → 405 (가드 뒤 실행 →
+   미인증 401, 인증된 미지원 메서드/하위경로 → 405). ← 인증된 `GET /api/pages/foo`가 렌더로 새어
+   404가 되는 회귀를 차단하는 핵심.
+4. health 정확 라우트 + health 405 catch-all (`all('/health')`)
+5. 렌더 와일드카드 `get('*')` — **반드시 모든 예약/정적 라우트 뒤에** 등록
+6. 전역 `all('*')` 405 폴백 — 렌더 뒤
+
+렌더 와일드카드는 어떤 경우에도 예약/정적 라우트보다 먼저 등록되지 않는다(RouterFactory가 단계로 보장).
 
 ## 요청 수명주기 & 충실도 제약(불변) — 테스트가 곧 명세
 
@@ -92,7 +109,7 @@ src/
 | F7 | 충돌 → `409 {error:"conflict", current:{path,revisionId,contentSha256,updatedAt}}`(html 제거) | ExceptionFilter에서 stripHtml |
 | F8 | 레포 실패 → `503 {error:"service_unavailable"}` + `console.error("repository failure",…)` | ExceptionFilter 기본 분기 |
 | F9 | 렌더: 정규화 실패/예약/미존재 → `404`; 성공 → `200`+정확한 html+CSP 헤더 | PageRenderController + renderHeaders |
-| F10 | 405 정밀도: `/health` 비-GET→405 · (인증 후) admin 미지원 메서드→405 · 임의 경로 비-GET→405 · `/api/foo` GET→404(예약) | RouterFactory의 405 폴백 + 가드·정적 우선 순서 |
+| F10 | 405 정밀도: `/health` 비-GET→405 · (인증 후) admin 미지원 메서드/하위경로(`/api/pages/foo`)→405 · 임의 경로 비-GET→405 · `/api/foo` GET→404(예약) | RouterFactory **등록 순서 불변식**(위) + admin-prefix 405 catch-all. 미인증 `/api/pages/foo`는 가드가 401, 인증 시 catch-all이 405(렌더 404로 새지 않음) |
 
 ## 에러 처리
 
@@ -118,7 +135,9 @@ src/
   `createServer({config,pages})`를 대체.
 - **포팅**: `server.test.ts`·`serverRoutes.test.ts`·`auth`·`config`·`path`·`renderHeaders`·`db`
   테스트의 모든 assertion을 새 구조로 1:1 이식.
-- **신규 필수**: `router.factory.test.ts`(라우트 등록·가드 적용·405 폴백 — 자작 프레임워크 코드),
+- **신규 필수**: `router.factory.test.ts`(자작 프레임워크 코드 — 라우트 등록, 가드 적용, **등록 순서
+  불변식**, 405 폴백). 반드시 포함할 케이스: `/health` GET/비-GET, `/api/pages/foo` 인증 유(405)/무(401),
+  `rollback` 잘못된 메서드(405), 렌더 와일드카드가 정적/예약 라우트를 선점하지 않음, 전역 비-GET→405.
   `pages.service.test.ts`(withReadDeadline·에러 전파).
 - 플랜 산출물로 **충실도 체크리스트(F1–F10) + 기존 assertion→신규 테스트 매핑표**를 강제.
 
@@ -133,7 +152,9 @@ src/
 
 1. **Bun + emitDecoratorMetadata + tsyringe 런타임 호환** — 통과하는 스파이크 테스트로 가장 먼저
    검증. 실패 시 DI 방식 재논의(설계 에스컬레이션).
-2. **RouterFactory의 405/404/401 우선순위 정밀 재현** — 최대 리스크 신규 코드. F10 전용 테스트로 방어.
+2. **RouterFactory의 405/404/401 우선순위 정밀 재현** — 최대 리스크 신규 코드. Hono는 등록 순서가
+   계약이므로 위 "등록 순서 불변식"을 RouterFactory가 결정적으로 강제하고 F10 전용 테스트로 방어.
+   (Phase A.5 설계 리뷰에서 high로 식별·수용된 항목.)
 3. **테스트 재작성 커버리지 누락** — assertion 매핑표로 방어.
 
 ## 범위 외 (YAGNI)
@@ -146,3 +167,13 @@ src/
 - DI: awilix(비데코레이터)·수동 생성자 주입도 후보였으나 사용자 선택대로 tsyringe 데코레이터 채택.
 - 라우팅: 명시적 `routes()` 등록이 더 낮은 리스크였으나 NestJS 충실도를 위해 데코레이터 라우팅 채택
   → RouterFactory 전용 테스트로 리스크 상쇄.
+
+## Phase A.5 설계 리뷰 판정 (감사 기록)
+
+codex 설계 리뷰(`--kind design`, `ok:true`/`planInDiff:true`/verdict `needs-attention`) — high 1건.
+
+- **[high] RouterFactory precedence cannot safely preserve 404/405/401** — **수용**.
+  Hono 라우팅 우선순위는 등록 순서이며 "정적 우선" 가정이 오류. 인증된 `GET /api/pages/foo`가 렌더
+  와일드카드에 먹혀 현행 405 대신 404가 되는 회귀를 현행 코드로 재현 확인. 데코레이터 라우팅 접근은
+  유지하되 위 "RouterFactory 등록 순서 불변식" + admin-prefix 405 catch-all + 전용 테스트로 보강.
+  (사용자 승인 후 본 문서에 반영·재승인.)
