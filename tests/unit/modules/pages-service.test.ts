@@ -15,10 +15,15 @@ const cfg = (o: Partial<AppConfig> = {}): ConfigService =>
 function repo(over: Partial<PageRepositoryContract> = {}): PageRepositoryContract {
   return {
     getCurrentPage: async () => null,
+    getCurrentSource: async () => null,
     getCurrentMetadata: async () => null,
+    listPages: async () => [],
     listRevisions: async () => [],
     savePage: async (i) => ({ path: i.path, revisionId: 1, contentSha256: "h", updatedAt: "t" }),
     rollbackPage: async (i) => ({ path: i.path, revisionId: i.revisionId, contentSha256: "h", updatedAt: "t" }),
+    softDeletePage: async (i) => ({ path: i.path, revisionId: 1, contentSha256: "h", updatedAt: "t", disabledAt: "t", purgeAfter: i.purgeAfter }),
+    restorePage: async (p) => ({ path: p, revisionId: 1, contentSha256: "h", updatedAt: "t", disabledAt: null, purgeAfter: null }),
+    purgeExpired: async () => 0,
     ...over,
   };
 }
