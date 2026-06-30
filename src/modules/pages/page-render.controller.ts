@@ -3,6 +3,8 @@ import { Controller, Get } from "../../core/http/decorators";
 import { error } from "../../core/http/responses";
 import { canonicalizePagePath } from "../../core/path/page-path";
 import {
+  httpDate,
+  ifModifiedSinceSatisfied,
   ifNoneMatchSatisfied,
   notModifiedHeaders,
   pageEtag,
@@ -24,13 +26,20 @@ export class PageRenderController {
     }
     const page = await this.pages.getCurrentPage(path);
     if (!page) return error("not_found", 404);
-    // 현재 리비전의 서빙 표현에 대한 강한 ETag. 변하지 않았으면 304로 본문 전송을 생략해
-    // 앞단 CDN/브라우저가 엣지 캐시 + 조건부 요청으로 오프로드할 수 있게 한다.
+    // 두 가지 검증자: 강한 ETag(콘텐츠 해시; 의미상 정확, 동일초 변경도 구분)와
+    // Last-Modified(updatedAt; 앞단 Cloudflare가 ETag를 제거해도 통과하는 백업 검증자).
+    // updatedAt은 모든 변경(save/rollback/soft delete/restore)에서 now()로 갱신되는 단조 포인터다.
     const etag = pageEtag(page.contentSha256, page.contentType);
-    if (ifNoneMatchSatisfied(c.req.header("if-none-match"), etag)) {
-      return new Response(null, { status: 304, headers: notModifiedHeaders(etag) });
+    const lastModified = httpDate(page.updatedAt);
+    const ifNoneMatch = c.req.header("if-none-match");
+    // RFC 7232 §6: If-None-Match가 있으면 If-Modified-Since는 무시한다.
+    const notModified = ifNoneMatch != null
+      ? ifNoneMatchSatisfied(ifNoneMatch, etag)
+      : ifModifiedSinceSatisfied(c.req.header("if-modified-since"), lastModified);
+    if (notModified) {
+      return new Response(null, { status: 304, headers: notModifiedHeaders(etag, lastModified) });
     }
     // getCurrentPage가 서빙용 콘텐츠를 돌려준다(마크다운은 저장 시 미리 렌더된 HTML 문서, html은 원본).
-    return new Response(page.html, { status: 200, headers: renderHeaders(etag) });
+    return new Response(page.html, { status: 200, headers: renderHeaders(etag, lastModified) });
   }
 }
