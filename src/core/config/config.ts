@@ -30,7 +30,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
 
   const port = parsePositiveInt(env.PORT, 8080, "PORT");
-  const htmlMaxBytes = parsePositiveInt(env.HTML_MAX_BYTES, 1_048_576, "HTML_MAX_BYTES");
+  // 기본 본문 상한 2 MiB. 더 키우려면 HTML_MAX_BYTES env로 배포별 override 가능하나,
+  // 쓰기 요청은 본문을 메모리에 버퍼링하므로(JSON 상한 = 6배) 파드 메모리 한도와 함께 조정할 것.
+  const htmlMaxBytes = parsePositiveInt(env.HTML_MAX_BYTES, 2_097_152, "HTML_MAX_BYTES");
   const jsonMaxBytes = parsePositiveInt(env.JSON_MAX_BYTES, defaultJsonMaxBytes(htmlMaxBytes), "JSON_MAX_BYTES");
   const minJsonMaxBytes = defaultJsonMaxBytes(htmlMaxBytes);
   if (jsonMaxBytes < minJsonMaxBytes) {
