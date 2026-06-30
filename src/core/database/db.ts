@@ -64,6 +64,27 @@ export async function migrate(pool: Pool, runtimeDatabaseUrl: string): Promise<v
         end if;
       end $$;
     `);
+    // content_type: 저장 콘텐츠의 타입('html' | 'markdown'). 기존 행은 'html'로 채운다.
+    await client.query("alter table page_revisions add column if not exists content_type text not null default 'html'");
+    // rendered_html: 서빙용으로 미리 렌더한 HTML(마크다운만 채움; html 타입은 null이라 html 컬럼을 그대로 서빙).
+    // 렌더를 저장 시점 1회로 옮겨, 공개 렌더 경로를 HTML과 동일한 정적 서빙(파싱 없음)으로 유지한다.
+    await client.query("alter table page_revisions add column if not exists rendered_html text");
+    // dedup 키에 content_type을 포함해, 동일 바이트라도 타입이 다르면 별개 리비전으로 보존한다.
+    // (예: html "hello" → markdown "hello" 전환을 누락 없이 새 리비전으로 만든다.)
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1 from pg_constraint where conname = 'page_revisions_content_dedup_key'
+        ) then
+          alter table page_revisions
+            add constraint page_revisions_content_dedup_key
+            unique (path, content_sha256, content_type);
+        end if;
+      end $$;
+    `);
+    // content_type 도입 전의 2열 unique는 복합 unique로 대체한다(없으면 no-op).
+    await client.query("alter table page_revisions drop constraint if exists page_revisions_path_content_sha256_key");
     // soft delete: disabled_at(비활성 시각, null=활성), purge_after(이 시각 이후 완전 삭제 대상).
     await client.query("alter table pages add column if not exists disabled_at timestamptz");
     await client.query("alter table pages add column if not exists purge_after timestamptz");

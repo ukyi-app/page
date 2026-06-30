@@ -1,7 +1,10 @@
+export type ContentType = "html" | "markdown";
+
 export type PageMetadata = {
   path: string;
   revisionId: number;
   contentSha256: string;
+  contentType: ContentType;
   updatedAt: string;
 };
 

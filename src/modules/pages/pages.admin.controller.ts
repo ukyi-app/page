@@ -5,9 +5,10 @@ import { RequestTooLargeError, BadRequestError } from "../../core/http/http-erro
 import { Controller, Delete, Get, Post, Put, UseGuard } from "../../core/http/decorators";
 import { json, error } from "../../core/http/responses";
 import { ConfigService } from "../../core/config/config.service";
+import { audit, clientIp } from "../../core/observability/audit";
 import { PagesService } from "./pages.service";
 import {
-  asRecord, parseExpectedContentSha256, parsePath,
+  asRecord, parseContentType, parseExpectedContentSha256, parsePath,
   parsePositiveRevisionId, parseRequiredExpectedContentSha256,
 } from "./pages.validation";
 
@@ -26,8 +27,10 @@ export class PagesAdminController {
     const html = body.html;
     if (typeof html !== "string") throw new BadRequestError("invalid_body");
     if (byteLength(html) > this.config.htmlMaxBytes) throw new RequestTooLargeError();
+    const contentType = parseContentType(body.contentType);
     const expectedContentSha256 = parseExpectedContentSha256(body.expectedContentSha256, false);
-    const saved = await this.pages.savePage({ path, html, expectedContentSha256 });
+    const saved = await this.pages.savePage({ path, html, contentType, expectedContentSha256 });
+    audit("page.save", { path, revisionId: saved.revisionId, contentSha256: saved.contentSha256, ip: clientIp(c.req.raw.headers) });
     return json(saved);
   }
 
@@ -56,6 +59,7 @@ export class PagesAdminController {
     const path = parsePath(c.req.query("path") ?? null);
     const purgeAfter = new Date(Date.now() + this.config.purgeGraceMs).toISOString();
     const removed = await this.pages.softDeletePage({ path, purgeAfter });
+    audit("page.softDelete", { path, purgeAfter: removed.purgeAfter, ip: clientIp(c.req.raw.headers) });
     return json(removed);
   }
 
@@ -64,6 +68,7 @@ export class PagesAdminController {
     const body = asRecord(await readBoundedJson(c.req.raw, this.config.jsonMaxBytes));
     const path = parsePath(body.path);
     const restored = await this.pages.restorePage(path);
+    audit("page.restore", { path, ip: clientIp(c.req.raw.headers) });
     return json(restored);
   }
 
@@ -81,6 +86,7 @@ export class PagesAdminController {
     const revisionId = parsePositiveRevisionId(body.revisionId);
     const expectedContentSha256 = parseRequiredExpectedContentSha256(body.expectedContentSha256);
     const rolledBack = await this.pages.rollbackPage({ path, revisionId, expectedContentSha256 });
+    audit("page.rollback", { path, revisionId: rolledBack.revisionId, ip: clientIp(c.req.raw.headers) });
     return json(rolledBack);
   }
 }

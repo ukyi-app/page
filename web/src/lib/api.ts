@@ -1,4 +1,4 @@
-import type { ApiErrorBody, PageListItem, PageMetadata, PageSource } from "./types";
+import type { ApiErrorBody, ContentType, PageListItem, PageMetadata, PageSource } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -19,6 +19,7 @@ export class ApiError extends Error {
 export type SaveInput = {
   path: string;
   html: string;
+  contentType: ContentType;
   expectedContentSha256?: string;
 };
 
@@ -67,6 +68,19 @@ export function createApi(token: string) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ path }),
+      });
+    },
+    async listRevisions(path: string): Promise<PageMetadata[]> {
+      const out = await request<{ revisions: PageMetadata[] }>(
+        `/api/pages/revisions?path=${encodeURIComponent(path)}`,
+      );
+      return out.revisions;
+    },
+    rollback(input: { path: string; revisionId: number; expectedContentSha256: string }): Promise<PageMetadata> {
+      return request<PageMetadata>("/api/pages/rollback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
       });
     },
   };

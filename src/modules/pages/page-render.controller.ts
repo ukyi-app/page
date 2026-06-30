@@ -19,6 +19,7 @@ export class PageRenderController {
     }
     const page = await this.pages.getCurrentPage(path);
     if (!page) return error("not_found", 404);
+    // getCurrentPage가 서빙용 콘텐츠를 돌려준다(마크다운은 저장 시 미리 렌더된 HTML 문서, html은 원본).
     return new Response(page.html, { status: 200, headers: renderHeaders() });
   }
 }

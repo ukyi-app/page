@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -10,9 +10,16 @@ import { useErrorToast } from "../hooks/useErrorToast";
 import { ApiError, type Api } from "../lib/api";
 import { byteLength, formatBytes } from "../lib/format";
 import { FileIcon, SpinnerIcon, UploadIcon } from "../lib/icons";
+import { renderMarkdownDocument } from "../lib/markdown";
 import { validatePagePath } from "../lib/path";
+import type { ContentType } from "../lib/types";
 
 const HTML_MAX_BYTES = 1_048_576;
+
+/** 업로드 파일 확장자로 콘텐츠 타입을 추론한다(.md/.markdown → markdown, 그 외 → html). */
+function inferContentType(fileName: string): ContentType {
+  return /\.(md|markdown)$/i.test(fileName) ? "markdown" : "html";
+}
 
 export type EditorTarget = { mode: "create" } | { mode: "edit"; path: string };
 
@@ -31,10 +38,12 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
 
   const [pathValue, setPathValue] = useState("");
   const [html, setHtml] = useState("");
+  const [contentType, setContentType] = useState<ContentType>("html");
   const [expectedSha, setExpectedSha] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("edit");
+  const isMarkdown = contentType === "markdown";
 
   useEffect(() => {
     if (!open) return;
@@ -43,6 +52,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
     if (target.mode === "create") {
       setPathValue("");
       setHtml("");
+      setContentType("html");
       setExpectedSha(undefined);
       setLoading(false);
       return;
@@ -51,6 +61,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
     setPathValue(path);
     setExpectedSha(undefined);
     setHtml("");
+    setContentType("html");
     setLoading(true);
     let cancelled = false;
     api
@@ -58,6 +69,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
       .then((src) => {
         if (cancelled) return;
         setHtml(src.html);
+        setContentType(src.contentType);
         setExpectedSha(src.contentSha256);
       })
       .catch((err) => {
@@ -80,11 +92,16 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
   const tooLarge = bytes > HTML_MAX_BYTES;
   const canSave =
     !saving && !loading && html.length > 0 && !tooLarge && (isEdit || validatePagePath(targetPath) === null);
+  const previewDoc = useMemo(
+    () => (isMarkdown ? renderMarkdownDocument(html) : html),
+    [isMarkdown, html],
+  );
 
   async function onPickFile(file: File) {
     try {
       const text = await file.text();
       setHtml(text);
+      setContentType(inferContentType(file.name));
       toast.info("파일을 불러왔습니다", file.name);
     } catch {
       toast.error("파일을 읽지 못했습니다", file.name);
@@ -95,7 +112,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
     if (!canSave) return;
     setSaving(true);
     try {
-      await api.save({ path: targetPath, html, expectedContentSha256: isEdit ? expectedSha : undefined });
+      await api.save({ path: targetPath, html, contentType, expectedContentSha256: isEdit ? expectedSha : undefined });
       toast.success(isEdit ? "페이지를 저장했습니다" : "페이지를 만들었습니다", targetPath);
       onSaved();
       onOpenChange(false);
@@ -106,6 +123,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
           try {
             const src = await api.getSource(targetPath);
             setHtml(src.html);
+            setContentType(src.contentType);
             setExpectedSha(src.contentSha256);
           } catch {
             /* 무시: 다음 저장에서 재시도 */
@@ -131,7 +149,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
           <p className="text-sm text-muted-foreground">
             {isEdit
               ? "저장하면 새 리비전이 만들어지고, 비활성 상태였다면 다시 공개됩니다."
-              : "경로에 HTML을 저장하면 누구나 해당 경로에서 볼 수 있습니다."}
+              : "경로에 HTML 또는 Markdown을 저장하면 누구나 해당 경로에서 볼 수 있습니다."}
           </p>
         </div>
 
@@ -156,26 +174,46 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
         </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <TabsList>
-              <TabsTab value="edit">HTML</TabsTab>
+              <TabsTab value="edit">{isMarkdown ? "Markdown" : "HTML"}</TabsTab>
               <TabsTab value="preview">미리보기</TabsTab>
             </TabsList>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".html,.htm,text/html"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void onPickFile(file);
-                e.target.value = "";
-              }}
-            />
-            <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} disabled={saving}>
-              <FileIcon className="size-4" />
-              HTML 파일 불러오기
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-md border border-border p-0.5" role="group" aria-label="콘텐츠 형식">
+                {(["html", "markdown"] as const).map((ct) => (
+                  <button
+                    key={ct}
+                    type="button"
+                    onClick={() => setContentType(ct)}
+                    disabled={saving}
+                    aria-pressed={contentType === ct}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                      contentType === ct
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {ct === "html" ? "HTML" : "Markdown"}
+                  </button>
+                ))}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".html,.htm,.md,.markdown,text/html,text/markdown"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void onPickFile(file);
+                  e.target.value = "";
+                }}
+              />
+              <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} disabled={saving}>
+                <FileIcon className="size-4" />
+                파일 불러오기
+              </Button>
+            </div>
           </div>
 
           <TabsPanel value="edit" className="min-h-0 flex-1">
@@ -187,7 +225,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
               <Textarea
                 value={html}
                 onChange={(e) => setHtml(e.target.value)}
-                placeholder="<!doctype html>&#10;<h1>Hello</h1>"
+                placeholder={isMarkdown ? "# Hello\n\n본문을 Markdown으로 작성하세요." : "<!doctype html>\n<h1>Hello</h1>"}
                 className="h-[46vh] font-mono text-xs"
               />
             )}
@@ -198,7 +236,7 @@ export function PageEditorDialog({ open, onOpenChange, target, api, onSaved }: P
               <iframe
                 title="미리보기"
                 sandbox="allow-scripts"
-                srcDoc={html}
+                srcDoc={previewDoc}
                 className="size-full"
               />
             </div>

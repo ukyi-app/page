@@ -3,6 +3,15 @@ import { BadRequestError } from "../../core/http/http-errors";
 
 const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
 
+export type ContentType = "html" | "markdown";
+
+/** 저장 콘텐츠의 타입. 생략 시 'html'(기존 클라이언트 호환). 그 외 값은 거부. */
+export function parseContentType(value: unknown): ContentType {
+  if (value == null) return "html";
+  if (value === "html" || value === "markdown") return value;
+  throw new BadRequestError("invalid_content_type");
+}
+
 export function parsePath(value: unknown): string {
   try {
     return canonicalizePagePath(value);

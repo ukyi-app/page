@@ -11,6 +11,7 @@ function stripHtml(page: PageMetadata | RenderedPage): PageMetadata {
     path: page.path,
     revisionId: page.revisionId,
     contentSha256: page.contentSha256,
+    contentType: page.contentType,
     updatedAt: page.updatedAt,
   };
 }

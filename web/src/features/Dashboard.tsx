@@ -12,6 +12,7 @@ import type { PageListItem } from "../lib/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PageEditorDialog, type EditorTarget } from "./PageEditorDialog";
 import { PagesTable } from "./PagesTable";
+import { RevisionsDialog } from "./RevisionsDialog";
 
 type ConfirmState = { kind: "delete" | "restore"; page: PageListItem } | null;
 
@@ -29,6 +30,7 @@ export function Dashboard() {
     target: { mode: "create" },
   });
   const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [history, setHistory] = useState<PageListItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,6 +163,7 @@ export function Dashboard() {
               pages={pages}
               onOpen={openRendered}
               onEdit={openEdit}
+              onHistory={(page) => setHistory(page)}
               onDelete={(page) => setConfirm({ kind: "delete", page })}
               onRestore={(page) => setConfirm({ kind: "restore", page })}
             />
@@ -174,6 +177,14 @@ export function Dashboard() {
         target={editor.target}
         api={api}
         onSaved={() => void load()}
+      />
+
+      <RevisionsDialog
+        open={history !== null}
+        onOpenChange={(open) => !open && setHistory(null)}
+        page={history}
+        api={api}
+        onRolledBack={() => void load()}
       />
 
       <ConfirmDialog
