@@ -429,4 +429,58 @@ describe("createApp", () => {
     expect(line).toContain('"ip":"203.0.113.7"');
     expect(line).not.toContain("secret"); // 토큰은 절대 로깅하지 않는다
   });
+
+  async function saveDemo(server: Awaited<ReturnType<typeof createApp>>, body: object) {
+    return server.fetch(
+      request("/api/pages", {
+        method: "PUT",
+        headers: { authorization: "Bearer secret", "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  test("render response carries a strong ETag and a revalidate-only cache-control", async () => {
+    const server = await createApp({ config, pages: new FakePages() });
+    await saveDemo(server, { path: "/demo", html: "<h1>Hello</h1>" });
+
+    const rendered = await server.fetch(request("/demo"));
+
+    expect(rendered.status).toBe(200);
+    expect(rendered.headers.get("etag")).toMatch(/^"[a-f0-9]{64}:html"$/);
+    expect(rendered.headers.get("cache-control")).toBe("public, no-cache");
+  });
+
+  test("conditional GET with the current ETag returns 304 with no body", async () => {
+    const server = await createApp({ config, pages: new FakePages() });
+    await saveDemo(server, { path: "/demo", html: "<h1>Hello</h1>" });
+    const etag = (await server.fetch(request("/demo"))).headers.get("etag")!;
+
+    const conditional = await server.fetch(request("/demo", { headers: { "if-none-match": etag } }));
+
+    expect(conditional.status).toBe(304);
+    expect(await conditional.text()).toBe("");
+    expect(conditional.headers.get("etag")).toBe(etag);
+  });
+
+  test("conditional GET with a stale ETag returns 200 with the body", async () => {
+    const server = await createApp({ config, pages: new FakePages() });
+    await saveDemo(server, { path: "/demo", html: "<h1>Hello</h1>" });
+
+    const fresh = await server.fetch(request("/demo", { headers: { "if-none-match": '"stale:html"' } }));
+
+    expect(fresh.status).toBe(200);
+    expect(await fresh.text()).toBe("<h1>Hello</h1>");
+  });
+
+  test("identical bytes served under a different content type yield a different ETag", async () => {
+    const server = await createApp({ config, pages: new FakePages() });
+    await saveDemo(server, { path: "/demo", html: "x" });
+    const htmlEtag = (await server.fetch(request("/demo"))).headers.get("etag");
+
+    await saveDemo(server, { path: "/demo", html: "x", contentType: "markdown" });
+    const markdownEtag = (await server.fetch(request("/demo"))).headers.get("etag");
+
+    expect(htmlEtag).not.toBe(markdownEtag);
+  });
 });
