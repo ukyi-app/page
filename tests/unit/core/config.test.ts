@@ -11,8 +11,8 @@ describe("loadConfig", () => {
     const config = loadConfig(baseEnv);
 
     expect(config.port).toBe(8080);
-    expect(config.htmlMaxBytes).toBe(1_048_576);
-    expect(config.jsonMaxBytes).toBe(6_307_840);
+    expect(config.htmlMaxBytes).toBe(2_097_152);
+    expect(config.jsonMaxBytes).toBe(12_599_296);
     expect(config.dbConnectionTimeoutMs).toBe(2_000);
     expect(config.dbStatementTimeoutMs).toBe(3_000);
     expect(config.dbOperationTimeoutMs).toBe(3_500);

@@ -14,7 +14,9 @@ import { renderMarkdownDocument } from "../lib/markdown";
 import { validatePagePath } from "../lib/path";
 import type { ContentType } from "../lib/types";
 
-const HTML_MAX_BYTES = 1_048_576;
+// 백엔드 기본 HTML_MAX_BYTES(src/core/config/config.ts)와 일치시킨다 — 더 작으면 한도 내
+// 업로드가 클라이언트에서 먼저 거부된다.
+const HTML_MAX_BYTES = 2_097_152;
 
 /** 업로드 파일 확장자로 콘텐츠 타입을 추론한다(.md/.markdown → markdown, 그 외 → html). */
 function inferContentType(fileName: string): ContentType {
