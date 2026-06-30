@@ -21,7 +21,7 @@ const CSP = [
 // max-age로 stale을 서빙하지 않는다. 강한 ETag와 결합해 변하지 않았으면 304로 본문 전송을 생략한다.
 const CACHE_CONTROL = "public, no-cache";
 
-export function renderHeaders(etag?: string): Headers {
+export function renderHeaders(etag?: string, lastModified?: string): Headers {
   const headers = new Headers({
     "content-type": "text/html; charset=utf-8",
     "content-security-policy": CSP,
@@ -30,12 +30,33 @@ export function renderHeaders(etag?: string): Headers {
     "cache-control": CACHE_CONTROL,
   });
   if (etag) headers.set("etag", etag);
+  if (lastModified) headers.set("last-modified", lastModified);
   return headers;
 }
 
-/** 304 응답 헤더: 본문이 없으므로 검증자(ETag)와 캐시 정책만 싣는다. */
-export function notModifiedHeaders(etag: string): Headers {
-  return new Headers({ etag, "cache-control": CACHE_CONTROL });
+/** 304 응답 헤더: 본문이 없으므로 검증자(ETag·Last-Modified)와 캐시 정책만 싣는다. */
+export function notModifiedHeaders(etag: string, lastModified?: string): Headers {
+  const headers = new Headers({ etag, "cache-control": CACHE_CONTROL });
+  if (lastModified) headers.set("last-modified", lastModified);
+  return headers;
+}
+
+/** ISO 타임스탬프를 초 단위 HTTP-date로. Last-Modified 값과 If-Modified-Since 비교에 쓴다. */
+export function httpDate(iso: string): string {
+  return new Date(iso).toUTCString();
+}
+
+/**
+ * If-Modified-Since 충족 여부. 표현의 Last-Modified가 클라이언트 날짜보다 더 새롭지 않으면
+ * (lastModified <= since) 변경 없음(304). 두 값 모두 초 단위 HTTP-date라 초 단위로 비교된다.
+ * ETag(If-None-Match)가 함께 오면 RFC 7232 §6에 따라 호출부에서 이 검사를 건너뛴다.
+ */
+export function ifModifiedSinceSatisfied(header: string | undefined | null, lastModified: string): boolean {
+  if (!header) return false;
+  const since = Date.parse(header);
+  const modified = Date.parse(lastModified);
+  if (Number.isNaN(since) || Number.isNaN(modified)) return false;
+  return modified <= since;
 }
 
 /**

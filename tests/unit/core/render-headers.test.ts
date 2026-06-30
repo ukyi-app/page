@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  httpDate,
+  ifModifiedSinceSatisfied,
   ifNoneMatchSatisfied,
   notModifiedHeaders,
   pageEtag,
@@ -78,5 +80,48 @@ describe("ifNoneMatchSatisfied", () => {
 
   test("false on a different tag", () => {
     expect(ifNoneMatchSatisfied('"xyz:html"', etag)).toBe(false);
+  });
+});
+
+describe("httpDate", () => {
+  test("formats an ISO timestamp as a second-precision HTTP-date", () => {
+    expect(httpDate("2020-06-01T12:30:45.678Z")).toBe("Mon, 01 Jun 2020 12:30:45 GMT");
+  });
+});
+
+describe("ifModifiedSinceSatisfied", () => {
+  const lastModified = "Mon, 01 Jun 2020 12:30:45 GMT";
+
+  test("false when the header is absent", () => {
+    expect(ifModifiedSinceSatisfied(undefined, lastModified)).toBe(false);
+    expect(ifModifiedSinceSatisfied(null, lastModified)).toBe(false);
+  });
+
+  test("true when not modified since the client's date (lastModified <= since)", () => {
+    expect(ifModifiedSinceSatisfied("Mon, 01 Jun 2020 12:30:45 GMT", lastModified)).toBe(true); // equal
+    expect(ifModifiedSinceSatisfied("Tue, 02 Jun 2020 00:00:00 GMT", lastModified)).toBe(true); // since newer
+  });
+
+  test("false when modified after the client's date (lastModified > since)", () => {
+    expect(ifModifiedSinceSatisfied("Sun, 31 May 2020 00:00:00 GMT", lastModified)).toBe(false);
+  });
+
+  test("false on an unparseable header", () => {
+    expect(ifModifiedSinceSatisfied("not-a-date", lastModified)).toBe(false);
+  });
+});
+
+describe("renderHeaders/notModifiedHeaders last-modified", () => {
+  test("renderHeaders sets last-modified when provided", () => {
+    const headers = renderHeaders('"abc:html"', "Mon, 01 Jun 2020 12:30:45 GMT");
+    expect(headers.get("last-modified")).toBe("Mon, 01 Jun 2020 12:30:45 GMT");
+    expect(headers.get("etag")).toBe('"abc:html"');
+  });
+
+  test("notModifiedHeaders carries last-modified alongside the validator", () => {
+    const headers = notModifiedHeaders('"abc:html"', "Mon, 01 Jun 2020 12:30:45 GMT");
+    expect(headers.get("last-modified")).toBe("Mon, 01 Jun 2020 12:30:45 GMT");
+    expect(headers.get("etag")).toBe('"abc:html"');
+    expect(headers.get("cache-control")).toBe("public, no-cache");
   });
 });

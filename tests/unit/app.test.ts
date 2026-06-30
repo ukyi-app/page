@@ -483,4 +483,55 @@ describe("createApp", () => {
 
     expect(htmlEtag).not.toBe(markdownEtag);
   });
+
+  test("render response carries a Last-Modified header derived from updatedAt", async () => {
+    const pages = new FakePages();
+    const server = await createApp({ config, pages });
+    await saveDemo(server, { path: "/demo", html: "<h1>Hello</h1>" });
+
+    const rendered = await server.fetch(request("/demo"));
+
+    expect(rendered.status).toBe(200);
+    expect(rendered.headers.get("last-modified")).toBe(new Date(0).toUTCString());
+  });
+
+  test("conditional GET with a fresh If-Modified-Since returns 304 when no If-None-Match is sent", async () => {
+    const pages = new FakePages();
+    const server = await createApp({ config, pages });
+    await saveDemo(server, { path: "/demo", html: "<h1>Hello</h1>" });
+    pages.current!.updatedAt = "2020-06-01T00:00:00.000Z";
+
+    const res = await server.fetch(request("/demo", { headers: { "if-modified-since": "Tue, 02 Jun 2020 00:00:00 GMT" } }));
+
+    expect(res.status).toBe(304);
+    expect(await res.text()).toBe("");
+    expect(res.headers.get("last-modified")).toBe("Mon, 01 Jun 2020 00:00:00 GMT");
+  });
+
+  test("conditional GET with a stale If-Modified-Since returns 200 with the body", async () => {
+    const pages = new FakePages();
+    const server = await createApp({ config, pages });
+    await saveDemo(server, { path: "/demo", html: "<h1>Hello</h1>" });
+    pages.current!.updatedAt = "2020-06-01T00:00:00.000Z";
+
+    const res = await server.fetch(request("/demo", { headers: { "if-modified-since": "Sun, 31 May 2020 00:00:00 GMT" } }));
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("<h1>Hello</h1>");
+  });
+
+  test("If-None-Match takes precedence over If-Modified-Since (RFC 7232 §6)", async () => {
+    const pages = new FakePages();
+    const server = await createApp({ config, pages });
+    await saveDemo(server, { path: "/demo", html: "<h1>Hello</h1>" });
+    pages.current!.updatedAt = "2020-06-01T00:00:00.000Z";
+
+    // If-None-Match is present but does NOT match -> must serve 200, even though the
+    // If-Modified-Since alone would yield 304.
+    const res = await server.fetch(request("/demo", {
+      headers: { "if-none-match": '"stale:html"', "if-modified-since": "Tue, 02 Jun 2020 00:00:00 GMT" },
+    }));
+
+    expect(res.status).toBe(200);
+  });
 });
