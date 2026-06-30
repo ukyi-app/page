@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Pool } from "pg";
 import { migrate } from "../../src/core/database/db";
+import { BadRequestError } from "../../src/core/http/http-errors";
 import { PageConflictError, PageNotFoundError, PageRepository } from "../../src/modules/pages/pages.repository";
 import { createMigratorTestPool, createTestPool, testDatabaseUrl } from "./helpers";
 
@@ -165,6 +166,96 @@ describe("PageRepository", () => {
     await repo.softDeletePage({ path: "/demo", purgeAfter: future });
     await repo.savePage({ path: "/demo", html: "v2", expectedContentSha256: first.contentSha256 });
     expect((await repo.getCurrentPage("/demo"))?.html).toBe("v2");
+  });
+
+  test("stores content type; html serves source, markdown serves a pre-rendered document", async () => {
+    const htmlPage = await repo.savePage({ path: "/html", html: "<h1>hi</h1>" });
+    const mdPage = await repo.savePage({ path: "/md", html: "# hi", contentType: "markdown" });
+
+    expect(htmlPage.contentType).toBe("html");
+    expect(mdPage.contentType).toBe("markdown");
+
+    // html: 렌더·편집 모두 원본을 그대로 돌려준다(rendered_html 없음).
+    expect((await repo.getCurrentPage("/html"))?.contentType).toBe("html");
+    expect((await repo.getCurrentPage("/html"))?.html).toBe("<h1>hi</h1>");
+
+    // markdown: 렌더 경로는 저장 시 미리 렌더된 HTML 문서를 서빙한다(요청 시 파싱 없음).
+    const served = await repo.getCurrentPage("/md");
+    expect(served?.contentType).toBe("markdown");
+    expect(served?.html).toContain("<!doctype html>");
+    expect(served?.html).toContain("<h1>hi</h1>");
+
+    // markdown: 편집 경로는 원본 소스를 보존해 돌려준다.
+    const source = await repo.getCurrentSource("/md");
+    expect(source?.contentType).toBe("markdown");
+    expect(source?.html).toBe("# hi");
+  });
+
+  test("rejects markdown that overflows the parser at save time (no broken page is created)", async () => {
+    const pathological = "> ".repeat(16000) + "x"; // marked가 RangeError를 던지는 과도한 중첩
+    await expect(
+      repo.savePage({ path: "/deep", html: pathological, contentType: "markdown" }),
+    ).rejects.toBeInstanceOf(BadRequestError);
+    expect(await repo.getCurrentPage("/deep")).toBeNull();
+  });
+
+  test("list and revisions carry content type", async () => {
+    await repo.savePage({ path: "/md", html: "# hi", contentType: "markdown" });
+    const list = await repo.listPages();
+    expect(list.find((p) => p.path === "/md")?.contentType).toBe("markdown");
+    const revs = await repo.listRevisions("/md");
+    expect(revs[0]?.contentType).toBe("markdown");
+  });
+
+  test("rollback restores the content type and served form of the target revision", async () => {
+    const first = await repo.savePage({ path: "/p", html: "<h1>v1</h1>" });
+    const second = await repo.savePage({
+      path: "/p",
+      html: "# v2",
+      contentType: "markdown",
+      expectedContentSha256: first.contentSha256,
+    });
+    // 현재(markdown v2)는 미리 렌더된 문서를 서빙한다.
+    const servedMd = await repo.getCurrentPage("/p");
+    expect(servedMd?.contentType).toBe("markdown");
+    expect(servedMd?.html).toContain("<h1>v2</h1>");
+
+    const rolledBack = await repo.rollbackPage({
+      path: "/p",
+      revisionId: first.revisionId,
+      expectedContentSha256: second.contentSha256,
+    });
+    // html v1로 롤백하면 타입과 서빙 형태(원본 그대로)가 함께 복원된다.
+    expect(rolledBack.contentType).toBe("html");
+    const servedHtml = await repo.getCurrentPage("/p");
+    expect(servedHtml?.contentType).toBe("html");
+    expect(servedHtml?.html).toBe("<h1>v1</h1>");
+  });
+
+  test("same bytes with a different content type create distinct revisions and switch type", async () => {
+    const asHtml = await repo.savePage({ path: "/x", html: "hello" });
+    const asMarkdown = await repo.savePage({
+      path: "/x",
+      html: "hello",
+      contentType: "markdown",
+      expectedContentSha256: asHtml.contentSha256,
+    });
+
+    expect(asMarkdown.contentSha256).toBe(asHtml.contentSha256); // 동일 바이트 → 동일 sha
+    expect(asMarkdown.revisionId).not.toBe(asHtml.revisionId); // 그래도 별개 리비전
+    expect((await repo.getCurrentPage("/x"))?.contentType).toBe("markdown");
+    const revs = await repo.listRevisions("/x");
+    expect(revs.map((r) => r.contentType)).toEqual(["markdown", "html"]);
+
+    // 동일 소스+타입 재저장은 멱등(새 리비전 없음)
+    const retry = await repo.savePage({
+      path: "/x",
+      html: "hello",
+      contentType: "markdown",
+      expectedContentSha256: asMarkdown.contentSha256,
+    });
+    expect(retry).toEqual(asMarkdown);
+    expect(await repo.listRevisions("/x")).toHaveLength(2);
   });
 
   test("purgeExpired hard-deletes only pages past purge_after, cascading revisions", async () => {

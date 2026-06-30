@@ -19,10 +19,10 @@ function repo(over: Partial<PageRepositoryContract> = {}): PageRepositoryContrac
     getCurrentMetadata: async () => null,
     listPages: async () => [],
     listRevisions: async () => [],
-    savePage: async (i) => ({ path: i.path, revisionId: 1, contentSha256: "h", updatedAt: "t" }),
-    rollbackPage: async (i) => ({ path: i.path, revisionId: i.revisionId, contentSha256: "h", updatedAt: "t" }),
-    softDeletePage: async (i) => ({ path: i.path, revisionId: 1, contentSha256: "h", updatedAt: "t", disabledAt: "t", purgeAfter: i.purgeAfter }),
-    restorePage: async (p) => ({ path: p, revisionId: 1, contentSha256: "h", updatedAt: "t", disabledAt: null, purgeAfter: null }),
+    savePage: async (i) => ({ path: i.path, revisionId: 1, contentSha256: "h", contentType: i.contentType ?? "html", updatedAt: "t" }),
+    rollbackPage: async (i) => ({ path: i.path, revisionId: i.revisionId, contentSha256: "h", contentType: "html", updatedAt: "t" }),
+    softDeletePage: async (i) => ({ path: i.path, revisionId: 1, contentSha256: "h", contentType: "html", updatedAt: "t", disabledAt: "t", purgeAfter: i.purgeAfter }),
+    restorePage: async (p) => ({ path: p, revisionId: 1, contentSha256: "h", contentType: "html", updatedAt: "t", disabledAt: null, purgeAfter: null }),
     purgeExpired: async () => 0,
     ...over,
   };
@@ -39,8 +39,8 @@ describe("PagesService", () => {
   });
   test("write is NOT deadline-wrapped (hanging-read-deadline does not apply)", async () => {
     let called = false;
-    const svc = new PagesService(repo({ savePage: async (i) => { called = true; return { path: i.path, revisionId: 9, contentSha256: "h", updatedAt: "t" }; } }), cfg());
-    const out = await svc.savePage({ path: "/x", html: "h" });
+    const svc = new PagesService(repo({ savePage: async (i) => { called = true; return { path: i.path, revisionId: 9, contentSha256: "h", contentType: i.contentType ?? "html", updatedAt: "t" }; } }), cfg());
+    const out = await svc.savePage({ path: "/x", html: "h", contentType: "html" });
     expect(called).toBe(true);
     expect(out.revisionId).toBe(9);
   });

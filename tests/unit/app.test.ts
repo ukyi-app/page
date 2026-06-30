@@ -64,6 +64,7 @@ class FakePages {
       path: input.path,
       revisionId: 1,
       contentSha256: createHash("sha256").update(input.html).digest("hex"),
+      contentType: input.contentType ?? "html",
       updatedAt: new Date(0).toISOString(),
     };
     this.current = { ...meta, html: input.html };
@@ -404,5 +405,28 @@ describe("createApp", () => {
     expect(r.status).toBe(400);
     expect(await r.json()).toEqual({ error: "invalid_path" });
     expect(pages.calls).toEqual([]);
+  });
+
+  test("emits a structured audit log on a successful save (no token leaked)", async () => {
+    const server = await createApp({ config, pages: new FakePages() });
+    const lines: string[] = [];
+    const orig = console.log;
+    console.log = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+    try {
+      await server.fetch(
+        request("/api/pages", {
+          method: "PUT",
+          headers: { authorization: "Bearer secret", "content-type": "application/json", "cf-connecting-ip": "203.0.113.7" },
+          body: JSON.stringify({ path: "/audited", html: "<h1>a</h1>" }),
+        }),
+      );
+    } finally {
+      console.log = orig;
+    }
+    const line = lines.find((l) => l.includes('"audit":"page.save"'));
+    expect(line).toBeDefined();
+    expect(line).toContain('"path":"/audited"');
+    expect(line).toContain('"ip":"203.0.113.7"');
+    expect(line).not.toContain("secret"); // 토큰은 절대 로깅하지 않는다
   });
 });

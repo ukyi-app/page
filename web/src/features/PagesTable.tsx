@@ -2,18 +2,19 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { formatDateTime, shortSha, timeUntil } from "../lib/format";
-import { ExternalIcon, PencilIcon, RestoreIcon, TrashIcon } from "../lib/icons";
+import { ExternalIcon, HistoryIcon, PencilIcon, RestoreIcon, TrashIcon } from "../lib/icons";
 import type { PageListItem } from "../lib/types";
 
 type Props = {
   pages: PageListItem[];
   onOpen: (path: string) => void;
   onEdit: (path: string) => void;
+  onHistory: (page: PageListItem) => void;
   onDelete: (page: PageListItem) => void;
   onRestore: (page: PageListItem) => void;
 };
 
-export function PagesTable({ pages, onOpen, onEdit, onDelete, onRestore }: Props) {
+export function PagesTable({ pages, onOpen, onEdit, onHistory, onDelete, onRestore }: Props) {
   return (
     <Table>
       <TableHeader>
@@ -32,16 +33,26 @@ export function PagesTable({ pages, onOpen, onEdit, onDelete, onRestore }: Props
           return (
             <TableRow key={page.path} className="animate-in">
               <TableCell>
-                <button
-                  type="button"
-                  onClick={() => onOpen(page.path)}
-                  disabled={disabled}
-                  className="group inline-flex max-w-full items-center gap-1.5 truncate font-medium text-foreground transition-colors hover:text-primary disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:text-muted-foreground"
-                  title={disabled ? "비활성 페이지는 열 수 없습니다" : `${page.path} 열기`}
-                >
-                  <span className="truncate">{page.path}</span>
-                  {!disabled && <ExternalIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />}
-                </button>
+                <div className="flex min-w-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(page.path)}
+                    disabled={disabled}
+                    className="group inline-flex min-w-0 items-center gap-1.5 truncate font-medium text-foreground transition-colors hover:text-primary disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:text-muted-foreground"
+                    title={disabled ? "비활성 페이지는 열 수 없습니다" : `${page.path} 열기`}
+                  >
+                    <span className="truncate">{page.path}</span>
+                    {!disabled && <ExternalIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />}
+                  </button>
+                  {page.contentType === "markdown" && (
+                    <span
+                      className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      title="Markdown 페이지"
+                    >
+                      md
+                    </span>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 {disabled ? (
@@ -59,6 +70,9 @@ export function PagesTable({ pages, onOpen, onEdit, onDelete, onRestore }: Props
               <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{shortSha(page.contentSha256)}</TableCell>
               <TableCell>
                 <div className="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => onHistory(page)} title="리비전 히스토리">
+                    <HistoryIcon className="size-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => onEdit(page.path)} title="편집">
                     <PencilIcon className="size-4" />
                   </Button>

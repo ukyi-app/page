@@ -133,6 +133,39 @@ describe("server routes with Postgres", () => {
     expect(await (await server.fetch(req("/demo"))).text()).toBe("v1");
   });
 
+  test("renders a markdown page as a styled HTML document under the sandbox CSP", async () => {
+    const put = await server.fetch(
+      req("/api/pages", adminJson({ path: "/post", html: "# Hi\n\nbody **bold**", contentType: "markdown" })),
+    );
+    expect(put.status).toBe(200);
+    expect(((await put.json()) as any).contentType).toBe("markdown");
+
+    const rendered = await server.fetch(req("/post"));
+    expect(rendered.status).toBe(200);
+    expect(rendered.headers.get("content-type")).toContain("text/html");
+    expect(rendered.headers.get("content-security-policy")).toContain("sandbox");
+    const body = await rendered.text();
+    expect(body).toContain("<!doctype html>");
+    expect(body).toContain("<h1>Hi</h1>");
+    expect(body).toContain("<strong>bold</strong>");
+    expect(body).toContain("markdown-body");
+  });
+
+  test("rejects an invalid content type with a stable 400", async () => {
+    const res = await server.fetch(req("/api/pages", adminJson({ path: "/bad", html: "x", contentType: "md" })));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_content_type" });
+  });
+
+  test("rejects markdown that overflows the parser with a 400 instead of creating a 503 page", async () => {
+    const pathological = "> ".repeat(16000) + "x";
+    const res = await server.fetch(req("/api/pages", adminJson({ path: "/deep", html: pathological, contentType: "markdown" })));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_markdown" });
+    // 저장이 거부됐으므로 공개 렌더는 404(영구 503 페이지가 생기지 않는다).
+    expect((await server.fetch(req("/deep"))).status).toBe(404);
+  });
+
   test("soft delete lifecycle: list, disable, source, restore over HTTP", async () => {
     const bearer = { authorization: `Bearer ${adminToken}` };
     await server.fetch(req("/api/pages", adminJson({ path: "/demo", html: "<h1>hi</h1>" })));

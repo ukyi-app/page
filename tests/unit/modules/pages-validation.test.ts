@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  asRecord, parseExpectedContentSha256, parsePath,
+  asRecord, parseContentType, parseExpectedContentSha256, parsePath,
   parsePositiveRevisionId, parseRequiredExpectedContentSha256,
 } from "../../../src/modules/pages/pages.validation";
 
@@ -21,6 +21,15 @@ describe("pages.validation", () => {
       try { parsePositiveRevisionId(v); throw new Error("no throw"); } catch (e: any) { expect(e.code).toBe("invalid_revision_id"); }
     }
     expect(parsePositiveRevisionId(3)).toBe(3);
+  });
+  test("parseContentType defaults to html and rejects unknown values", () => {
+    expect(parseContentType(undefined)).toBe("html");
+    expect(parseContentType(null)).toBe("html");
+    expect(parseContentType("html")).toBe("html");
+    expect(parseContentType("markdown")).toBe("markdown");
+    for (const v of ["md", "HTML", "text", 1, {}, true]) {
+      try { parseContentType(v); throw new Error("no throw"); } catch (e: any) { expect(e.code).toBe("invalid_content_type"); }
+    }
   });
   test("expectedContentSha256 optional vs required", () => {
     expect(parseExpectedContentSha256(undefined)).toBeUndefined();

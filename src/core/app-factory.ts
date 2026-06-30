@@ -10,6 +10,9 @@ import { type AnyClass, collectControllers, collectProviders, type Provider } fr
 import { registerExceptionFilter } from "./http/exception.filter";
 import { RouterFactory } from "./http/router.factory";
 
+/** 시작 시 마이그레이션 전용 statement timeout(ms). 런타임 읽기 한도와 분리한 넉넉한 값. */
+const MIGRATION_STATEMENT_TIMEOUT_MS = 60_000;
+
 export interface BuildAppOptions {
   /** APP_CONFIG override (테스트에서 주입). 없으면 loadConfig()로 env에서 로드. */
   config?: AppConfig;
@@ -36,7 +39,9 @@ export async function buildApp(
   if (!options.skipMigration) {
     const migratePool = createPool(config.migrateDatabaseUrl, {
       connectionTimeoutMs: config.dbConnectionTimeoutMs,
-      statementTimeoutMs: config.dbStatementTimeoutMs,
+      // 마이그레이션은 시작 시 1회·advisory-lock으로 직렬화된다. DDL(특히 채워진 테이블의 인덱스 빌드)을
+      // 런타임 읽기 예산(dbStatementTimeoutMs, 기본 3s)으로 죽이면 부팅이 실패하므로 넉넉한 한도를 쓴다.
+      statementTimeoutMs: MIGRATION_STATEMENT_TIMEOUT_MS,
     });
     try {
       await migrate(migratePool, config.databaseUrl);
