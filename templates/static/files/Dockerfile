@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # homelab static 계약: Vite 산출물(dist)을 /public에 넣고 SWS가 /health + SPA fallback을 제공한다.
 
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
