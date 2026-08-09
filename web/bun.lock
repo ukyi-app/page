@@ -11,7 +11,7 @@
         "marked": "^18.0.5",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
-        "tailwind-merge": "^2.6.0",
+        "tailwind-merge": "^2.6.1",
       },
       "devDependencies": {
         "@fontsource/ibm-plex-mono": "^5.2.7",
