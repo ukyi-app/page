@@ -1,4 +1,4 @@
-import { Toast as BaseToast } from "@base-ui-components/react/toast";
+import { Toast as BaseToast } from "@base-ui/react/toast";
 import { CloseIcon } from "../../lib/icons";
 import { cn } from "../../lib/utils";
 
