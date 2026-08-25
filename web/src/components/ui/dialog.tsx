@@ -1,4 +1,4 @@
-import { Dialog as BaseDialog } from "@base-ui-components/react/dialog";
+import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import type { ComponentProps } from "react";
 import { CloseIcon } from "../../lib/icons";
 import { cn } from "../../lib/utils";
