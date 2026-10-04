@@ -20,7 +20,7 @@
     "web:build": "cd web && bun install --frozen-lockfile && bun run build"
   },
   "dependencies": {
-    "hono": "^4.12.27",
+    "hono": "^4.13.13",
     "marked": "^18.0.10",
     "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",
